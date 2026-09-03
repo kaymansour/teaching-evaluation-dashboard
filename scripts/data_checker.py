@@ -43,6 +43,9 @@ SEMESTERS = {
     "spring 2022": "Spring 2022",
 }
 
+
+
+
 # The department folder codes used in the data package
 DEPARTMENTS = ["AFS", "CSMIS", "GFP", "ID"]
 

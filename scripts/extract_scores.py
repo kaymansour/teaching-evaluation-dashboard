@@ -1,7 +1,8 @@
 """
 extract_scores.py 
 
-Reads the Fall 2020 evaluation file and pulls out the scores.
+Reads the Fall 2020 and Spring 2021 evaluation files and pulls out
+the scores.
 
 Produces two files:
   data/processed/evaluations_clean.csv  - scores we can use
@@ -51,6 +52,13 @@ FALL_2020 = (
     / "2 Years Data for Teaching Evaluation Surveys Results"
     / "Teaching Evaluation Fall 2020"
     / "20201.xlsx"
+)
+# The Spring 2021 file we chose in Phase 3
+SPRING_2021 = (
+    RAW_DIR
+    / "2 Years Data for Teaching Evaluation Surveys Results"
+    / "Teaching Evaluation Spring 2021"
+    / "Evaluation results 20212.xlsx"
 )
 
 
@@ -181,6 +189,70 @@ def read_scores(sheet, start_row, next_start):
 
     return scores
 
+# Read the Spring 2021 file, which is a flat table
+def read_spring_2021(path):
+
+    # Open it as a raw grid
+    sheet = pd.read_excel(path, header=None, dtype=str)
+
+    # A list to collect the rows we keep
+    rows = []
+
+    # Count how many comment rows we throw away
+    skipped_comments = 0
+
+    # Row 0 is blank and row 1 holds the headings, so start at row 2
+    for r in range(2, len(sheet)):
+
+        # Comment questions start with "List the" - skip them
+        description = clean(sheet.iloc[r, 8])
+        if description.lower().startswith("list the"):
+            skipped_comments = skipped_comments + 1
+            continue
+
+        # The question number sits in column 7
+        question = clean(sheet.iloc[r, 7])
+
+        # Skip anything that is not a number
+        if not question.isdigit():
+            continue
+
+        number = int(question)
+
+        # Keep only questions 1 to 20
+        if number < 1 or number > 20:
+            continue
+
+        # Look up the UKPSF category
+        mapping = ukpsf.get(number, {})
+
+        # The score sits in column 10
+        score = to_number(sheet.iloc[r, 10])
+
+        rows.append({
+            "SemesterCode": "20212",
+            "SemesterName": "Spring 2021",
+            "AcademicYear": "2020/2021",
+            "SemesterOrder": 2,
+            "CourseCode": clean(sheet.iloc[r, 0]),
+            "CourseName": clean(sheet.iloc[r, 1]),
+            "Degree": clean(sheet.iloc[r, 2]),
+            "Section": clean(sheet.iloc[r, 3]),
+            "CourseEdition": clean(sheet.iloc[r, 6]),
+            "FacultyID": clean(sheet.iloc[r, 4]),
+            "FacultyNameRaw": clean(sheet.iloc[r, 5]),
+            "EvaluatedStudents": clean(sheet.iloc[r, 9]),
+            "QuestionNumber": number,
+            "UKPSFCategory": mapping.get("UKPSFCategory", ""),
+            "UKPSFCode": mapping.get("UKPSFCode", ""),
+            "ScorePercentage": score,
+            "DataQualityStatus": check(score),
+            "SourceFile": path.name,
+            "SourceRow": r + 1,
+        })
+
+    print("Spring 2021 comment rows skipped:", skipped_comments)
+    return rows
 
 # ---------------------------------------------------------------
 # LOAD THE UKPSF LOOKUP MADE IN PHASE 5
@@ -281,6 +353,14 @@ for i in range(len(block_starts)):
 
 print("Rows produced:", len(all_rows))
 
+# ---------------------------------------------------------------
+# READ THE SPRING 2021 FILE
+# ---------------------------------------------------------------
+
+# Add the Spring 2021 rows to the same list
+all_rows = all_rows + read_spring_2021(SPRING_2021)
+
+print("Rows after Spring 2021:", len(all_rows))
 
 # ---------------------------------------------------------------
 # SPLIT INTO USABLE AND EXCLUDED, THEN SAVE
