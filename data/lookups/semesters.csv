@@ -1,0 +1,5 @@
+SemesterCode,SemesterName,AcademicYear,SemesterOrder,TermType,HasRawData,DataGrain
+20201,Fall 2020,2020/2021,1,Fall,Yes,Question
+20212,Spring 2021,2020/2021,2,Spring,Yes,Question
+20211,Fall 2021,2021/2022,3,Fall,Yes,Question
+20222,Spring 2022,2021/2022,4,Spring,No,Summary
