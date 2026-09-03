@@ -1,11 +1,11 @@
 """
-extract_scores.py 
+extract_scores.py
 
-Reads the Fall 2020 and Spring 2021 evaluation files and pulls out
-the scores.
+Reads all four semesters of teaching evaluation data.
 
-Produces two files:
-  data/processed/evaluations_clean.csv  - scores we can use
+Produces three files:
+  data/processed/evaluations_clean.csv  - question-level scores we can use
+  data/processed/summary_2022.csv       - Spring 2022, summary grain only
   data/quality/excluded_records.csv     - scores we cannot use, with reasons
 
 Reads the source files only. Never changes them.
@@ -46,24 +46,18 @@ QUALITY_DIR = PROJECT_ROOT / "data" / "quality"
 # Where our lookup tables live
 LOOKUP_DIR = PROJECT_ROOT / "data" / "lookups"
 
-# The Fall 2020 file we chose in Phase 3
-FALL_2020 = (
-    RAW_DIR
-    / "2 Years Data for Teaching Evaluation Surveys Results"
-    / "Teaching Evaluation Fall 2020"
-    / "20201.xlsx"
-)
-# The Spring 2021 file we chose in Phase 3
-SPRING_2021 = (
-    RAW_DIR
-    / "2 Years Data for Teaching Evaluation Surveys Results"
-    / "Teaching Evaluation Spring 2021"
-    / "Evaluation results 20212.xlsx"
-)
+# The top folder inside the unzipped package
+PACKAGE = RAW_DIR / "2 Years Data for Teaching Evaluation Surveys Results"
+
+# The four sources chosen in Phase 3
+FALL_2020 = PACKAGE / "Teaching Evaluation Fall 2020" / "20201.xlsx"
+SPRING_2021 = PACKAGE / "Teaching Evaluation Spring 2021" / "Evaluation results 20212.xlsx"
+FALL_2021 = PACKAGE / "Teaching Evaluation Fall 2021" / "CSMIS" / "Evaluation20211.xlsx"
+SPRING_2022 = PACKAGE / "Teaching Evaluation Spring 2022" / "Final 20222 Teaching Evaluation"
 
 
 # ---------------------------------------------------------------
-# REUSABLE INSTRUCTIONS
+# SMALL REUSABLE INSTRUCTIONS
 # ---------------------------------------------------------------
 
 # Tidy up one cell of text
@@ -123,6 +117,23 @@ def check(score):
     return "VALID"
 
 
+# ---------------------------------------------------------------
+# LOAD THE UKPSF LOOKUP MADE IN PHASE 5
+# ---------------------------------------------------------------
+
+# An empty box to hold the mapping
+ukpsf = {}
+
+# Read the lookup file one row at a time
+with open(LOOKUP_DIR / "ukpsf_questions.csv", encoding="utf-8-sig") as f:
+    for row in csv.DictReader(f):
+        ukpsf[int(row["QuestionNumber"])] = row
+
+
+# ---------------------------------------------------------------
+# READER 1 - BLOCK FILES  (Fall 2020 and Fall 2021)
+# ---------------------------------------------------------------
+
 # Read the header details at the top of one block
 def read_header(sheet, start_row):
 
@@ -167,10 +178,13 @@ def read_scores(sheet, start_row, next_start):
         if row_number >= len(sheet):
             break
 
-        # The Sequence number sits in column 2
+        # Sequence usually sits in column 2, but one Fall 2021 block
+        # is shifted one column left. Try column 2, then column 1.
         sequence = clean(sheet.iloc[row_number, 2])
+        if not sequence.isdigit():
+            sequence = clean(sheet.iloc[row_number, 1])
 
-        # Skip rows where Sequence is not a number
+        # Skip rows where Sequence is still not a number
         if not sequence.isdigit():
             continue
 
@@ -189,7 +203,77 @@ def read_scores(sheet, start_row, next_start):
 
     return scores
 
-# Read the Spring 2021 file, which is a flat table
+
+# Read a whole block-format file
+def read_blocks(path, code, name, year, order):
+
+    # Open it as a raw grid
+    #   header=None -> do not treat the first row as column names
+    #   dtype=str   -> read every cell as text, so leading zeros survive
+    sheet = pd.read_excel(path, header=None, dtype=str)
+
+    # Find where each block begins
+    starts = []
+    for r in range(len(sheet)):
+        if clean(sheet.iloc[r, 1]) == "Course Code":
+            starts.append(r)
+
+    rows = []
+
+    # Go through each block in turn
+    for i in range(len(starts)):
+
+        start = starts[i]
+
+        # Where the next block begins, or the end of the file
+        if i + 1 < len(starts):
+            end = starts[i + 1]
+        else:
+            end = len(sheet)
+
+        # Read this block's header details
+        header = read_header(sheet, start)
+
+        # Read this block's scores and combine them with the header
+        for score in read_scores(sheet, start, end):
+
+            mapping = ukpsf.get(score["QuestionNumber"], {})
+
+            rows.append({
+                "SemesterCode": code,
+                "SemesterName": name,
+                "AcademicYear": year,
+                "SemesterOrder": order,
+                "CourseCode": header.get("Course Code", ""),
+                "CourseName": header.get("Course Name", ""),
+                "Degree": header.get("Degree", ""),
+                "Section": header.get("Section", ""),
+                "CourseEdition": header.get("Edition", ""),
+                "FacultyID": header.get("Instructor ID", ""),
+                "FacultyNameRaw": header.get("Instructor Name", ""),
+                "EvaluatedStudents": header.get("Eval Students", ""),
+                "QuestionNumber": score["QuestionNumber"],
+                "UKPSFCategory": mapping.get("UKPSFCategory", ""),
+                "UKPSFCode": mapping.get("UKPSFCode", ""),
+                "ScorePercentage": score["Score"],
+                "DataQualityStatus": check(score["Score"]),
+                "SourceFile": path.name,
+                "SourceRow": score["SourceRow"],
+            })
+
+    # Report what this file gave us, so a shortfall is visible
+    expected = len(starts) * 20
+    print(f"  {path.name:<30} {len(starts):>4} blocks {len(rows):>5} rows"
+          f"  (expected {expected})")
+
+    return rows
+
+
+# ---------------------------------------------------------------
+# READER 2 - THE SPRING 2021 FLAT TABLE
+# ---------------------------------------------------------------
+
+# Read the Spring 2021 file, which is already a table
 def read_spring_2021(path):
 
     # Open it as a raw grid
@@ -251,119 +335,135 @@ def read_spring_2021(path):
             "SourceRow": r + 1,
         })
 
-    print("Spring 2021 comment rows skipped:", skipped_comments)
+    print(f"  {path.name:<30} {'':>4}        {len(rows):>5} rows"
+          f"  ({skipped_comments} comment rows skipped)")
+
     return rows
 
+
 # ---------------------------------------------------------------
-# LOAD THE UKPSF LOOKUP MADE IN PHASE 5
+# READER 3 - THE SPRING 2022 SUMMARY GRIDS
 # ---------------------------------------------------------------
 
-# An empty box to hold the mapping
-ukpsf = {}
+# Read one Spring 2022 grid and turn it into a long list
+def read_summary(path, dept, subject_kind):
 
-# Read the lookup file one row at a time
-with open(LOOKUP_DIR / "ukpsf_questions.csv", encoding="utf-8-sig") as f:
-    for row in csv.DictReader(f):
-        ukpsf[int(row["QuestionNumber"])] = row
+    # Open it as a raw grid
+    sheet = pd.read_excel(path, header=None, dtype=str)
+
+    # Row 0 holds the column headings
+    headers = []
+    for c in range(sheet.shape[1]):
+        headers.append(clean(sheet.iloc[0, c]))
+
+    # Columns 5 onwards are the subjects. The last one is "Avg" - skip it.
+    subject_cols = []
+    for c in range(5, sheet.shape[1]):
+        if headers[c] and headers[c] != "Avg":
+            subject_cols.append(c)
+
+    # Some headings repeat, so count them to spot duplicates
+    name_counts = {}
+    for c in subject_cols:
+        name_counts[headers[c]] = name_counts.get(headers[c], 0) + 1
+
+    rows = []
+
+    # Go down the question rows
+    for r in range(1, sheet.shape[0]):
+
+        # The question number sits in column 4
+        q = clean(sheet.iloc[r, 4])
+        if not q.isdigit():
+            continue
+
+        number = int(q)
+        if number < 1 or number > 20:
+            continue
+
+        mapping = ukpsf.get(number, {})
+
+        # Go across the subject columns
+        for c in subject_cols:
+
+            name = headers[c]
+
+            # If a heading appears twice, add the column number to tell them apart
+            if name_counts[name] > 1:
+                label = f"{name} (col {c})"
+            else:
+                label = name
+
+            score = to_number(sheet.iloc[r, c])
+
+            rows.append({
+                "SemesterCode": "20222",
+                "SemesterName": "Spring 2022",
+                "AcademicYear": "2021/2022",
+                "SemesterOrder": 4,
+                "DepartmentCode": dept,
+                "SubjectType": subject_kind,
+                "SubjectLabel": label,
+                "QuestionNumber": number,
+                "UKPSFCategory": mapping.get("UKPSFCategory", ""),
+                "UKPSFCode": mapping.get("UKPSFCode", ""),
+                "ScorePercentage": score,
+                "EvaluatedStudents": "",
+                "DataQualityStatus": check(score),
+                "DataGrain": "Summary",
+                "SourceFile": f"{dept}/{path.name}",
+                "SourceRow": r + 1,
+            })
+
+    print(f"  {dept}/{path.name:<18} {len(subject_cols):>3} {subject_kind:<7} columns"
+          f"  {len(rows):>4} rows")
+
+    return rows
+
+
+# ---------------------------------------------------------------
+# READ THE THREE QUESTION-LEVEL FILES
+# ---------------------------------------------------------------
 
 print("UKPSF lookup loaded:", len(ukpsf), "questions")
+print()
+print("Reading question-level files:")
 
-
-# ---------------------------------------------------------------
-# OPEN THE FALL 2020 FILE
-# ---------------------------------------------------------------
-
-# Open it
-#   header=None  -> do not treat the first row as column names
-#   dtype=str    -> read every cell as text, so leading zeros survive
-sheet = pd.read_excel(FALL_2020, header=None, dtype=str)
-
-print("File    :", FALL_2020.name)
-print("Rows    :", sheet.shape[0])
-print("Columns :", sheet.shape[1])
-
-
-# ---------------------------------------------------------------
-# FIND WHERE EACH BLOCK BEGINS
-# ---------------------------------------------------------------
-
-# A list to hold the row number where each block begins
-block_starts = []
-
-# Look at every row in the file
-for row_number in range(len(sheet)):
-
-    # A block begins wherever column 1 says "Course Code"
-    if clean(sheet.iloc[row_number, 1]) == "Course Code":
-        block_starts.append(row_number)
-
-print("Blocks found:", len(block_starts))
-
-
-# ---------------------------------------------------------------
-# READ EVERY BLOCK
-# ---------------------------------------------------------------
-
-# A list to hold every score from the whole file
+# A list to hold every score from every file
 all_rows = []
 
-# Go through each block in turn
-for i in range(len(block_starts)):
+# Fall 2020 - block format
+all_rows = all_rows + read_blocks(FALL_2020, "20201", "Fall 2020", "2020/2021", 1)
 
-    # Where this block starts
-    start = block_starts[i]
-
-    # Where the next block starts, or the end of the file
-    if i + 1 < len(block_starts):
-        end = block_starts[i + 1]
-    else:
-        end = len(sheet)
-
-    # Read this block's header details
-    header = read_header(sheet, start)
-
-    # Read this block's 20 scores
-    for score in read_scores(sheet, start, end):
-
-        # Look up the UKPSF category for this question number
-        mapping = ukpsf.get(score["QuestionNumber"], {})
-
-        # Combine the header details with this one score
-        all_rows.append({
-            "SemesterCode": "20201",
-            "SemesterName": "Fall 2020",
-            "AcademicYear": "2020/2021",
-            "SemesterOrder": 1,
-            "CourseCode": header.get("Course Code", ""),
-            "CourseName": header.get("Course Name", ""),
-            "Degree": header.get("Degree", ""),
-            "Section": header.get("Section", ""),
-            "CourseEdition": header.get("Edition", ""),
-            "FacultyID": header.get("Instructor ID", ""),
-            "FacultyNameRaw": header.get("Instructor Name", ""),
-            "EvaluatedStudents": header.get("Eval Students", ""),
-            "QuestionNumber": score["QuestionNumber"],
-            "UKPSFCategory": mapping.get("UKPSFCategory", ""),
-            "UKPSFCode": mapping.get("UKPSFCode", ""),
-            "ScorePercentage": score["Score"],
-            "DataQualityStatus": check(score["Score"]),
-            "SourceFile": FALL_2020.name,
-            "SourceRow": score["SourceRow"],
-        })
-
-print("Rows produced:", len(all_rows))
-
-# ---------------------------------------------------------------
-# READ THE SPRING 2021 FILE
-# ---------------------------------------------------------------
-
-# Add the Spring 2021 rows to the same list
+# Spring 2021 - flat table
 all_rows = all_rows + read_spring_2021(SPRING_2021)
 
-print("Rows after Spring 2021:", len(all_rows))
+# Fall 2021 - block format
+all_rows = all_rows + read_blocks(FALL_2021, "20211", "Fall 2021", "2021/2022", 3)
+
 
 # ---------------------------------------------------------------
-# SPLIT INTO USABLE AND EXCLUDED, THEN SAVE
+# READ SPRING 2022  (summary grain - kept in its own file)
+# ---------------------------------------------------------------
+
+print()
+print("Reading Spring 2022 summaries:")
+
+summary_rows = []
+
+for dept in ["AFS", "CSMIS", "GFP", "ID"]:
+
+    # Staff.xlsx holds course columns
+    summary_rows = summary_rows + read_summary(
+        SPRING_2022 / dept / "Staff.xlsx", dept, "Course")
+
+    # Programme.xlsx holds faculty columns
+    summary_rows = summary_rows + read_summary(
+        SPRING_2022 / dept / "Programme.xlsx", dept, "Faculty")
+
+
+# ---------------------------------------------------------------
+# SPLIT INTO USABLE AND EXCLUDED, THEN SAVE EVERYTHING
 # ---------------------------------------------------------------
 
 # Scores we can calculate with
@@ -372,11 +472,11 @@ valid = [r for r in all_rows if r["DataQualityStatus"] == "VALID"]
 # Scores we cannot use, kept so nothing disappears silently
 excluded = [r for r in all_rows if r["DataQualityStatus"] != "VALID"]
 
-# Make sure the output folders exist
+# Make sure the output folders exist before writing anything
 PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 QUALITY_DIR.mkdir(parents=True, exist_ok=True)
 
-# Save the clean data
+# Save the clean question-level data
 with open(PROCESSED_DIR / "evaluations_clean.csv", "w",
           newline="", encoding="utf-8-sig") as f:
     writer = csv.DictWriter(f, fieldnames=all_rows[0].keys())
@@ -390,15 +490,39 @@ with open(QUALITY_DIR / "excluded_records.csv", "w",
     writer.writeheader()
     writer.writerows(excluded)
 
+# Save Spring 2022 on its own - different grain from the main table
+with open(PROCESSED_DIR / "summary_2022.csv", "w",
+          newline="", encoding="utf-8-sig") as f:
+    writer = csv.DictWriter(f, fieldnames=summary_rows[0].keys())
+    writer.writeheader()
+    writer.writerows(summary_rows)
+
 
 # ---------------------------------------------------------------
 # SHOW THE SUMMARY
 # ---------------------------------------------------------------
 
 print()
-print("Total rows read :", len(all_rows))
-print("Valid           :", len(valid))
-print("Excluded        :", len(excluded))
+print("QUESTION-LEVEL DATA  (Fall 2020, Spring 2021, Fall 2021)")
+print("  Total rows read :", len(all_rows))
+print("  Valid           :", len(valid))
+print("  Excluded        :", len(excluded))
+
+# Break the exclusions down by reason
+reasons = {}
+for row in excluded:
+    reason = row["DataQualityStatus"]
+    reasons[reason] = reasons.get(reason, 0) + 1
+
+print("  Excluded by reason:")
+for reason in sorted(reasons):
+    print(f"    {reason:<20} {reasons[reason]}")
+
+print()
+print("SUMMARY DATA  (Spring 2022)")
+print("  Rows            :", len(summary_rows))
+
 print()
 print("Saved: data/processed/evaluations_clean.csv")
+print("Saved: data/processed/summary_2022.csv")
 print("Saved: data/quality/excluded_records.csv")
