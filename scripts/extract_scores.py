@@ -117,6 +117,31 @@ def check(score):
     return "VALID"
 
 
+# The letters we expect a name to start with
+ASCII_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+
+
+# Make a tidy version of a faculty name for display
+def clean_name(name):
+
+    # Start with the tidied text
+    text = clean(name)
+
+    # Some names begin with a stray character left over from a bad
+    # export - an accented letter or an Arabic diacritic. Remove
+    # anything at the front that is not a plain A-Z letter.
+    trimmed = text
+    while trimmed and trimmed[0] not in ASCII_LETTERS:
+        trimmed = trimmed[1:]
+
+    # One name is written entirely in Arabic, so trimming leaves
+    # nothing. In that case keep the original rather than lose it.
+    if trimmed == "":
+        return text
+
+    return trimmed
+
+
 # ---------------------------------------------------------------
 # LOAD THE UKPSF LOOKUP MADE IN PHASE 5
 # ---------------------------------------------------------------
@@ -251,6 +276,7 @@ def read_blocks(path, code, name, year, order):
                 "CourseEdition": header.get("Edition", ""),
                 "FacultyID": header.get("Instructor ID", ""),
                 "FacultyNameRaw": header.get("Instructor Name", ""),
+                "FacultyNameClean": clean_name(header.get("Instructor Name", "")),
                 "EvaluatedStudents": header.get("Eval Students", ""),
                 "QuestionNumber": score["QuestionNumber"],
                 "UKPSFCategory": mapping.get("UKPSFCategory", ""),
@@ -325,6 +351,7 @@ def read_spring_2021(path):
             "CourseEdition": clean(sheet.iloc[r, 6]),
             "FacultyID": clean(sheet.iloc[r, 4]),
             "FacultyNameRaw": clean(sheet.iloc[r, 5]),
+            "FacultyNameClean": clean_name(sheet.iloc[r, 5]),
             "EvaluatedStudents": clean(sheet.iloc[r, 9]),
             "QuestionNumber": number,
             "UKPSFCategory": mapping.get("UKPSFCategory", ""),
