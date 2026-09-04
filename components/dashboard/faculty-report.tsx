@@ -501,7 +501,7 @@ function Report({ detail }: { detail: FacultyDetail }) {
                     {showScore(detail.benchmarks.institution)}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    University average
+                    Institutional average
                   </p>
                 </div>
                 <div>
