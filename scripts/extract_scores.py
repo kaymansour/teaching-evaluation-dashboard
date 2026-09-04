@@ -156,6 +156,27 @@ with open(LOOKUP_DIR / "ukpsf_questions.csv", encoding="utf-8-sig") as f:
 
 
 # ---------------------------------------------------------------
+# LOAD THE COURSE-TO-DEPARTMENT LOOKUP
+# ---------------------------------------------------------------
+
+# Built by scripts/extract_departments.py from the timetable PDFs.
+# The evaluation spreadsheets contain no department field.
+departments = {}
+
+department_file = LOOKUP_DIR / "course_departments.csv"
+if department_file.exists():
+    with open(department_file, encoding="utf-8-sig") as f:
+        for row in csv.DictReader(f):
+            departments[row["CourseCode"]] = row["DepartmentName"]
+
+
+# Look up the department for a course code. Some codes carry a
+# trailing asterisk in one file and not another, so strip it.
+def find_department(course_code):
+    return departments.get(course_code.replace("*", "").strip(), "")
+
+
+# ---------------------------------------------------------------
 # READER 1 - BLOCK FILES  (Fall 2020 and Fall 2021)
 # ---------------------------------------------------------------
 
@@ -271,6 +292,7 @@ def read_blocks(path, code, name, year, order):
                 "SemesterOrder": order,
                 "CourseCode": header.get("Course Code", ""),
                 "CourseName": header.get("Course Name", ""),
+                "DepartmentName": find_department(header.get("Course Code", "")),
                 "Degree": header.get("Degree", ""),
                 "Section": header.get("Section", ""),
                 "CourseEdition": header.get("Edition", ""),
@@ -346,6 +368,7 @@ def read_spring_2021(path):
             "SemesterOrder": 2,
             "CourseCode": clean(sheet.iloc[r, 0]),
             "CourseName": clean(sheet.iloc[r, 1]),
+            "DepartmentName": find_department(clean(sheet.iloc[r, 0])),
             "Degree": clean(sheet.iloc[r, 2]),
             "Section": clean(sheet.iloc[r, 3]),
             "CourseEdition": clean(sheet.iloc[r, 6]),

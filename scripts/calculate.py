@@ -141,6 +141,34 @@ for fid, f_rows in group_by(rows, lambda r: r["FacultyID"]).items():
     result["semesters"] = sorted({r["SemesterName"] for r in f_rows})
     by_faculty[fid] = result
 
+# One result per department
+by_department = {}
+for name, dept_rows in group_by(rows, lambda r: r["DepartmentName"]).items():
+    if not name:
+        continue
+    result = summarise(dept_rows)
+    result["name"] = name
+    result["facultyCount"] = len({r["FacultyID"] for r in dept_rows})
+    result["courseCount"] = len({r["CourseCode"] for r in dept_rows})
+
+    # This department's score in each semester, for the trend
+    semesters = {}
+    for sem, sem_rows in group_by(dept_rows, lambda r: r["SemesterCode"]).items():
+        entry = summarise(sem_rows)
+        entry["semesterName"] = sem_rows[0]["SemesterName"]
+        entry["semesterOrder"] = int(sem_rows[0]["SemesterOrder"])
+        semesters[sem] = entry
+    result["bySemester"] = semesters
+
+    # This department's UKPSF scores
+    categories = {}
+    for cat, cat_rows in group_by(dept_rows, lambda r: r["UKPSFCategory"]).items():
+        categories[cat] = summarise(cat_rows)
+    result["ukpsfCategories"] = categories
+
+    by_department[name] = result
+
+
 # One result per course
 by_course = {}
 for cc, c_rows in group_by(rows, lambda r: r["CourseCode"]).items():
@@ -447,6 +475,17 @@ for c in sorted(below_courses, key=lambda x: x["score"])[:5]:
     print(f"     {c['name'][:32]:<34} {c['score']:>6}%")
 
 
+heading("DEPARTMENTS")
+print("  Taken from the timetable PDFs, which state the department")
+print("  for every course. The evaluation files do not.")
+print()
+for name in sorted(by_department, key=lambda n: -(by_department[n]["score"] or 0)):
+    d = by_department[name]
+    print(f"  {name[:32]:<34} {d['score']:>6}%  {bar(d['score'], 16)}")
+    print(f"     {d['courseCount']} courses, {d['facultyCount']} faculty,"
+          f" {d['questionCount']} answers")
+
+
 heading("EXAMPLE: ONE TEACHER IN DETAIL")
 example_id = sorted(faculty_detail,
                     key=lambda k: -faculty_detail[k]["classCount"])[0]
@@ -503,6 +542,7 @@ metrics = {
     "byQuestion": {str(k): v for k, v in by_question.items()},
     "byFaculty": by_faculty,
     "byCourse": by_course,
+    "byDepartment": by_department,
     "facultyDetail": faculty_detail,
     "questionTracking": question_tracking,
     "improvement": improvement,

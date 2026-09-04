@@ -112,6 +112,7 @@ export type OverviewData = {
   improvementSummary: ImprovementSummary;
   improvement: Improvement;
   dataQuality: DataQuality;
+  byDepartment: Record<string, DepartmentResult>;
 };
 
 // --- Overview page ---------------------------------------------
@@ -194,4 +195,22 @@ export type TrackedQuestion = {
 // public/data/question-tracking.json
 export type QuestionTracking = {
   byDegree: Record<string, Record<string, TrackedQuestion>>;
+};
+
+
+// --- Departments -----------------------------------------------
+
+// A department's score in one semester
+export type DepartmentSemester = Result & {
+  semesterName: string;
+  semesterOrder: number;
+};
+
+// One department's full results
+export type DepartmentResult = Result & {
+  name: string;
+  facultyCount: number;
+  courseCount: number;
+  bySemester: Record<string, DepartmentSemester>;
+  ukpsfCategories: Record<string, Result>;
 };

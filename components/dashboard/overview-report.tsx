@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/select";
 
 import type {
+  DepartmentResult,
   OverviewData,
   QuestionTracking,
 } from "@/types/metrics";
@@ -405,6 +406,13 @@ export function OverviewReport({
         </p>
       </section>
 
+      {/* ---------- Requirements 2, 3 and 6: departments ---------- */}
+      <DepartmentSection
+        departments={data.byDepartment}
+        target={target}
+        institution={data.institution.score}
+      />
+
       {/* ---------- UKPSF ---------- */}
       <section>
         <h2 className="mb-1 text-lg font-medium">Teaching quality areas</h2>
@@ -549,9 +557,6 @@ export function OverviewReport({
           </Card>
         </div>
       </section>
-
-      {/* ---------- Requirement 5: question tracking ---------- */}
-      <QuestionTrackingSection tracking={tracking} target={target} />
 
       {/* ---------- Requirement 4: improvement required ---------- */}
       <section>
@@ -708,35 +713,9 @@ export function OverviewReport({
         </div>
       </section>
 
-      {/* ---------- What is not available ---------- */}
-      <section>
-        <Card className="border-amber-300 bg-amber-50/50">
-          <CardHeader>
-            <CardTitle className="text-base">
-              Department and programme comparisons are not available
-            </CardTitle>
-            <CardDescription className="space-y-2">
-              <span className="block">
-                The evaluation files contain no department or programme field,
-                and folder names cannot substitute: the same file was supplied
-                inside two different department folders.
-              </span>
-              <span className="block">
-                Two derivation routes were tested. Course codes named in the
-                departmental summaries cover 32 of 184 courses. Faculty names
-                in the Spring 2022 summaries cover 16 of 74 staff. Neither is
-                sufficient, and applying a guessed mapping to the remainder
-                would produce comparisons that look authoritative but are not.
-              </span>
-              <span className="block">
-                A course-to-department mapping from the college would enable
-                programme averages, department averages and interdepartmental
-                comparison.
-              </span>
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </section>
+      {/* ---------- Requirement 5: question tracking ---------- */}
+      <QuestionTrackingSection tracking={tracking} target={target} />
+
     </div>
   );
 }
@@ -900,6 +879,293 @@ function QuestionTrackingSection({
           </div>
         </div>
       )}
+    </section>
+  );
+}
+
+// ---------- Requirements 2, 3 and 6: department results ----------
+function DepartmentSection({
+  departments,
+  target,
+  institution,
+}: {
+  departments: Record<string, DepartmentResult>;
+  target: number;
+  institution: number | null;
+}) {
+  // Which department the semester chart is showing
+  const names = Object.keys(departments).sort(
+    (a, b) => (departments[b].score ?? 0) - (departments[a].score ?? 0)
+  );
+
+  const [selected, setSelected] = useState<string>(names[0] ?? "");
+
+  const chartData = names.map((name) => ({
+    label: name.length > 24 ? name.slice(0, 22) + "\u2026" : name,
+    full: name,
+    score: departments[name].score as number,
+  }));
+
+  const chosen = departments[selected];
+
+  const trend = chosen
+    ? Object.values(chosen.bySemester)
+        .sort((a, b) => a.semesterOrder - b.semesterOrder)
+        .filter((s) => s.score !== null)
+        .map((s) => ({ label: s.semesterName, score: s.score as number }))
+    : [];
+
+  return (
+    <section>
+      <h2 className="mb-1 text-lg font-medium">Department comparison</h2>
+      <p className="mb-4 text-sm text-muted-foreground">
+        Average score for each of the {names.length} departments. The dashed
+        line marks the {target}% threshold.
+      </p>
+
+      {/* --- The comparison chart --- */}
+      <Card className="p-4 pt-6">
+        <div className="h-96 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={chartData}
+              layout="vertical"
+              margin={{ top: 4, right: 56, left: 8, bottom: 4 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+              <XAxis
+                type="number"
+                domain={[0, 100]}
+                tickLine={false}
+                axisLine={false}
+                fontSize={12}
+                unit="%"
+              />
+              <YAxis
+                type="category"
+                dataKey="label"
+                width={190}
+                tickLine={false}
+                axisLine={false}
+                fontSize={12}
+              />
+              <Tooltip
+                formatter={(value: unknown) => [`${Number(value)}%`, "Average"]}
+                cursor={{ fill: "rgba(0,0,0,0.04)" }}
+              />
+              <ReferenceLine x={target} stroke="#B42318" strokeDasharray="4 4" />
+              {institution !== null && (
+                <ReferenceLine
+                  x={institution}
+                  stroke="#6B7280"
+                  strokeDasharray="2 2"
+                />
+              )}
+              <Bar
+                dataKey="score"
+                radius={[0, 4, 4, 0]}
+                barSize={24}
+                animationDuration={800}
+              >
+                {chartData.map((entry) => (
+                  <Cell
+                    key={entry.full}
+                    fill={entry.score < target ? "#B42318" : "#047857"}
+                  />
+                ))}
+                <LabelList
+                  dataKey="score"
+                  position="right"
+                  formatter={(value: unknown) => `${Number(value)}%`}
+                  fontSize={12}
+                  fontWeight={600}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Red dashed line: {target}% threshold. Grey dashed line: institutional
+          average ({institution}%).
+        </p>
+      </Card>
+
+      {/* --- The detail table --- */}
+      <div className="mt-6 overflow-x-auto rounded-md border">
+        <table className="w-full text-sm">
+          <thead className="border-b bg-muted/50">
+            <tr>
+              <th className="px-3 py-2 text-left font-medium">Department</th>
+              <th className="px-3 py-2 text-right font-medium">Courses</th>
+              <th className="px-3 py-2 text-right font-medium">Faculty</th>
+              <th className="px-3 py-2 text-right font-medium">Answers</th>
+              <th className="px-3 py-2 text-right font-medium">Score</th>
+              <th className="px-3 py-2 text-right font-medium">
+                vs institution
+              </th>
+              <th className="px-3 py-2 text-left font-medium">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {names.map((name) => {
+              const item = departments[name];
+              const difference =
+                item.score !== null && institution !== null
+                  ? Math.round((item.score - institution) * 10) / 10
+                  : null;
+              return (
+                <tr
+                  key={name}
+                  className="border-b transition-colors last:border-0 hover:bg-muted/40"
+                >
+                  <td className="px-3 py-2">{name}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                    {item.courseCount}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                    {item.facultyCount}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                    {item.questionCount.toLocaleString()}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {showScore(item.score)}
+                  </td>
+                  <td
+                    className={
+                      "px-3 py-2 text-right tabular-nums " +
+                      (difference !== null && difference < 0
+                        ? "text-red-700"
+                        : "text-emerald-700")
+                    }
+                  >
+                    {difference === null
+                      ? "\u2014"
+                      : difference >= 0
+                        ? `+${difference}`
+                        : difference}
+                  </td>
+                  <td className="px-3 py-2">
+                    <StatusLabel status={item.status} />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* --- One department over time --- */}
+      <div className="mt-8">
+        <h3 className="mb-1 text-base font-medium">
+          One department over time
+        </h3>
+        <p className="mb-3 text-sm text-muted-foreground">
+          Choose a department to see how its results have moved.
+        </p>
+
+        <div className="mb-4">
+          <label
+            htmlFor="department-select"
+            className="mb-1.5 block text-sm font-medium"
+          >
+            Department
+          </label>
+          <Select value={selected} onValueChange={setSelected}>
+            <SelectTrigger id="department-select" className="w-full sm:w-80">
+              <SelectValue placeholder="Choose a department" />
+            </SelectTrigger>
+            <SelectContent>
+              {names.map((name) => (
+                <SelectItem key={name} value={name}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {chosen && trend.length > 0 ? (
+          <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+            <Card className="p-4">
+              <div className="h-56 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={trend} margin={{ top: 8, right: 44 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="label" tickLine={false} fontSize={12} />
+                    <YAxis
+                      domain={[0, 100]}
+                      tickLine={false}
+                      axisLine={false}
+                      fontSize={12}
+                      unit="%"
+                    />
+                    <Tooltip
+                      formatter={(value: unknown) => [
+                        `${Number(value)}%`,
+                        "Average",
+                      ]}
+                    />
+                    <ReferenceLine
+                      y={target}
+                      stroke="#B42318"
+                      strokeDasharray="4 4"
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="score"
+                      stroke="#E0241B"
+                      strokeWidth={2}
+                      dot={{ r: 4, fill: "#E0241B" }}
+                      activeDot={{ r: 6 }}
+                      animationDuration={600}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </Card>
+
+            <div className="space-y-3">
+              {["AA", "CK", "PV"].map((code) => {
+                const result = chosen.ukpsfCategories[code];
+                if (!result) return null;
+                return (
+                  <Card
+                    key={code}
+                    className="transition-shadow hover:shadow-md"
+                  >
+                    <CardHeader className="pb-2">
+                      <CardDescription className="text-xs">
+                        {CATEGORY_NAMES[code]}
+                      </CardDescription>
+                      <CardTitle className="text-xl tabular-nums">
+                        {showScore(result.score)}
+                      </CardTitle>
+                    </CardHeader>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">No data</CardTitle>
+              <CardDescription>
+                There are no results for this department.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        )}
+      </div>
+
+      <p className="mt-6 text-xs text-muted-foreground">
+        Departments are taken from the timetable PDFs supplied with the data,
+        which state the department for every course. The evaluation
+        spreadsheets contain no department field. All 184 evaluated courses
+        were matched, and the three timetables agree with each other in every
+        case.
+      </p>
     </section>
   );
 }

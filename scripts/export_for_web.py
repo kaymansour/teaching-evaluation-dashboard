@@ -68,6 +68,7 @@ overview = {
     "byUkpsfCode": metrics["byUkpsfCode"],
     "byQuestion": metrics["byQuestion"],
     "byCourse": metrics["byCourse"],
+    "byDepartment": metrics["byDepartment"],
     "improvement": metrics["improvement"],
 }
 
