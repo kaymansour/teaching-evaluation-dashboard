@@ -113,6 +113,7 @@ export type OverviewData = {
   improvement: Improvement;
   dataQuality: DataQuality;
   byDepartment: Record<string, DepartmentResult>;
+  byProgramme: Record<string, ProgrammeResult>;
 };
 
 // --- Overview page ---------------------------------------------
@@ -212,5 +213,26 @@ export type DepartmentResult = Result & {
   facultyCount: number;
   courseCount: number;
   bySemester: Record<string, DepartmentSemester>;
+  ukpsfCategories: Record<string, Result>;
+};
+
+
+// --- Programmes ------------------------------------------------
+
+// A programme's score in one semester
+export type ProgrammeSemester = Result & {
+  semesterName: string;
+  semesterOrder: number;
+};
+
+// One programme: a degree level within a department
+export type ProgrammeResult = Result & {
+  name: string;
+  department: string;
+  degree: string;
+  facultyCount: number;
+  courseCount: number;
+  reliable: boolean;
+  bySemester: Record<string, ProgrammeSemester>;
   ukpsfCategories: Record<string, Result>;
 };

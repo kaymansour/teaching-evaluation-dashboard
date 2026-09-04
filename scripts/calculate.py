@@ -169,6 +169,48 @@ for name, dept_rows in group_by(rows, lambda r: r["DepartmentName"]).items():
     by_department[name] = result
 
 
+# --- Requirement 2: programme results ---------------------------------
+# The source data has no field called "Programme". A programme is
+# constructed as a degree level within a department, which is how
+# universities normally describe one: "Bachelor in Accounting".
+by_programme = {}
+for key, prog_rows in group_by(
+    rows, lambda r: (r["DepartmentName"], r["Degree"])
+).items():
+
+    department, degree = key
+    if not department or not degree:
+        continue
+
+    result = summarise(prog_rows)
+    result["name"] = f"{degree} in {department}"
+    result["department"] = department
+    result["degree"] = degree
+    result["facultyCount"] = len({r["FacultyID"] for r in prog_rows})
+    result["courseCount"] = len({r["CourseCode"] for r in prog_rows})
+
+    # Flag programmes built on very few answers, so a score based on
+    # one class is not read as confidently as one based on hundreds
+    result["reliable"] = result["questionCount"] >= 100
+
+    # This programme's score in each semester
+    semesters = {}
+    for sem, sem_rows in group_by(prog_rows, lambda r: r["SemesterCode"]).items():
+        entry = summarise(sem_rows)
+        entry["semesterName"] = sem_rows[0]["SemesterName"]
+        entry["semesterOrder"] = int(sem_rows[0]["SemesterOrder"])
+        semesters[sem] = entry
+    result["bySemester"] = semesters
+
+    # This programme's UKPSF scores
+    categories = {}
+    for cat, cat_rows in group_by(prog_rows, lambda r: r["UKPSFCategory"]).items():
+        categories[cat] = summarise(cat_rows)
+    result["ukpsfCategories"] = categories
+
+    by_programme[result["name"]] = result
+
+
 # One result per course
 by_course = {}
 for cc, c_rows in group_by(rows, lambda r: r["CourseCode"]).items():
@@ -486,6 +528,16 @@ for name in sorted(by_department, key=lambda n: -(by_department[n]["score"] or 0
           f" {d['questionCount']} answers")
 
 
+heading("PROGRAMMES")
+print("  A programme is a degree level within a department.")
+print("  Results based on fewer than 100 answers are marked.")
+print()
+for name in sorted(by_programme, key=lambda n: -(by_programme[n]["score"] or 0)):
+    p = by_programme[name]
+    note = "" if p["reliable"] else f"   only {p['questionCount']} answers"
+    print(f"  {name[:40]:<42} {p['score']:>6}%{note}")
+
+
 heading("EXAMPLE: ONE TEACHER IN DETAIL")
 example_id = sorted(faculty_detail,
                     key=lambda k: -faculty_detail[k]["classCount"])[0]
@@ -543,6 +595,7 @@ metrics = {
     "byFaculty": by_faculty,
     "byCourse": by_course,
     "byDepartment": by_department,
+    "byProgramme": by_programme,
     "facultyDetail": faculty_detail,
     "questionTracking": question_tracking,
     "improvement": improvement,

@@ -40,6 +40,7 @@ import {
 import type {
   DepartmentResult,
   OverviewData,
+  ProgrammeResult,
   QuestionTracking,
 } from "@/types/metrics";
 
@@ -411,6 +412,12 @@ export function OverviewReport({
         departments={data.byDepartment}
         target={target}
         institution={data.institution.score}
+      />
+
+      {/* ---------- Requirement 2: programmes ---------- */}
+      <ProgrammeSection
+        programmes={data.byProgramme}
+        target={target}
       />
 
       {/* ---------- UKPSF ---------- */}
@@ -1165,6 +1172,228 @@ function DepartmentSection({
         spreadsheets contain no department field. All 184 evaluated courses
         were matched, and the three timetables agree with each other in every
         case.
+      </p>
+    </section>
+  );
+}
+
+// ---------- Requirement 2: programme results ----------
+function ProgrammeSection({
+  programmes,
+  target,
+}: {
+  programmes: Record<string, ProgrammeResult>;
+  target: number;
+}) {
+  const all = Object.values(programmes).sort(
+    (a, b) => (b.score ?? 0) - (a.score ?? 0)
+  );
+
+  // Group programmes under their department so the Bachelor and
+  // Diploma versions of the same subject sit together
+  const departments: Record<string, ProgrammeResult[]> = {};
+  for (const item of all) {
+    if (!departments[item.department]) {
+      departments[item.department] = [];
+    }
+    departments[item.department].push(item);
+  }
+
+  const departmentNames = Object.keys(departments).sort();
+
+  const chartData = all.map((item) => ({
+    label:
+      item.name.length > 34 ? item.name.slice(0, 32) + "\u2026" : item.name,
+    full: item.name,
+    score: item.score as number,
+  }));
+
+  const below = all.filter((item) => item.status === "Improvement Required");
+
+  return (
+    <section>
+      <h2 className="mb-1 text-lg font-medium">Programme comparison</h2>
+      <p className="mb-4 text-sm text-muted-foreground">
+        Average score for each of the {all.length} degree programmes. A
+        programme is a degree level within a department.
+      </p>
+
+      {/* --- The comparison chart --- */}
+      <Card className="p-4 pt-6">
+        <div className="h-[34rem] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={chartData}
+              layout="vertical"
+              margin={{ top: 4, right: 56, left: 8, bottom: 4 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+              <XAxis
+                type="number"
+                domain={[0, 100]}
+                tickLine={false}
+                axisLine={false}
+                fontSize={12}
+                unit="%"
+              />
+              <YAxis
+                type="category"
+                dataKey="label"
+                width={240}
+                tickLine={false}
+                axisLine={false}
+                fontSize={11}
+              />
+              <Tooltip
+                formatter={(value: unknown) => [`${Number(value)}%`, "Average"]}
+                cursor={{ fill: "rgba(0,0,0,0.04)" }}
+              />
+              <ReferenceLine x={target} stroke="#B42318" strokeDasharray="4 4" />
+              <Bar
+                dataKey="score"
+                radius={[0, 4, 4, 0]}
+                barSize={18}
+                animationDuration={800}
+              >
+                {chartData.map((entry) => (
+                  <Cell
+                    key={entry.full}
+                    fill={entry.score < target ? "#B42318" : "#047857"}
+                  />
+                ))}
+                <LabelList
+                  dataKey="score"
+                  position="right"
+                  formatter={(value: unknown) => `${Number(value)}%`}
+                  fontSize={11}
+                  fontWeight={600}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
+
+      {/* --- Programmes below the threshold --- */}
+      {below.length > 0 && (
+        <div className="mt-6">
+          <h3 className="mb-2 text-base font-medium">
+            Programmes below {target}% ({below.length})
+          </h3>
+          <div className="overflow-x-auto rounded-md border">
+            <table className="w-full text-sm">
+              <thead className="border-b bg-muted/50">
+                <tr>
+                  <th className="px-3 py-2 text-left font-medium">Programme</th>
+                  <th className="px-3 py-2 text-right font-medium">Answers</th>
+                  <th className="px-3 py-2 text-right font-medium">Score</th>
+                  <th className="px-3 py-2 text-right font-medium">
+                    Difference
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {below.map((item) => (
+                  <tr
+                    key={item.name}
+                    className="border-b transition-colors last:border-0 hover:bg-muted/40"
+                  >
+                    <td className="px-3 py-2">
+                      {item.name}
+                      {!item.reliable && (
+                        <span className="ml-2 whitespace-nowrap text-xs text-amber-700">
+                          few answers, treat with caution
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                      {item.questionCount.toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {showScore(item.score)}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-red-700">
+                      {item.gap}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* --- Degree levels compared within each department --- */}
+      <div className="mt-8">
+        <h3 className="mb-1 text-base font-medium">
+          Degree levels within each department
+        </h3>
+        <p className="mb-4 text-sm text-muted-foreground">
+          Where a department teaches at more than one level, the gap between
+          them is often larger than the gap between departments.
+        </p>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          {departmentNames.map((department) => {
+            const items = departments[department];
+            const scores = items
+              .map((item) => item.score)
+              .filter((score): score is number => score !== null);
+            const spread =
+              scores.length > 1
+                ? Math.round((Math.max(...scores) - Math.min(...scores)) * 10) /
+                  10
+                : null;
+
+            return (
+              <Card
+                key={department}
+                className="transition-shadow hover:shadow-md"
+              >
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">{department}</CardTitle>
+                  {spread !== null && (
+                    <CardDescription>
+                      {spread} point gap between levels
+                    </CardDescription>
+                  )}
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {items.map((item) => (
+                    <div key={item.name}>
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="text-sm">
+                          {item.degree}
+                          {!item.reliable && (
+                            <span className="ml-2 text-xs text-amber-700">
+                              {item.questionCount} answers
+                            </span>
+                          )}
+                        </span>
+                        <span className="shrink-0 tabular-nums text-sm font-medium">
+                          {showScore(item.score)}
+                        </span>
+                      </div>
+                      <div className="mt-1.5">
+                        <ScoreBar score={item.score} target={target} />
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+
+      <p className="mt-6 text-xs text-muted-foreground">
+        The source data contains no field named &ldquo;Programme&rdquo;. A
+        programme here is a degree level within a department, which is how a
+        degree of study is normally described. Both fields come from the
+        supplied data: degree level from the evaluation files, department from
+        the timetable PDFs. Programmes based on fewer than 100 survey answers
+        are marked, since a score drawn from one small class is far less
+        dependable than one drawn from hundreds.
       </p>
     </section>
   );
