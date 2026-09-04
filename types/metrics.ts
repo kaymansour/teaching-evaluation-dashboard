@@ -100,7 +100,6 @@ export type ImprovementSummary = {
   courseBelowPercent: number;
 };
 
-// The whole of public/data/overview.json
 export type OverviewData = {
   target: number;
   institution: Result;
@@ -111,4 +110,88 @@ export type OverviewData = {
   byQuestion: Record<string, QuestionResult>;
   byCourse: Record<string, CourseResult>;
   improvementSummary: ImprovementSummary;
+  improvement: Improvement;
+  dataQuality: DataQuality;
+};
+
+// --- Overview page ---------------------------------------------
+
+// One faculty member below the threshold
+export type ImprovementFaculty = {
+  id: string;
+  name: string;
+  score: number;
+  gap: number;
+  classCount: number;
+};
+
+// One course below the threshold
+export type ImprovementCourse = {
+  code: string;
+  name: string;
+  score: number;
+  gap: number;
+  questionCount: number;
+  groupCount: number;
+};
+
+// One survey question below the threshold
+export type ImprovementQuestion = {
+  number: string;
+  score: number;
+  gap: number;
+  ukpsfCategory: string;
+  ukpsfCode: string;
+};
+
+// One class below the threshold
+export type ImprovementClass = {
+  facultyId: string;
+  facultyName: string;
+  courseCode: string;
+  courseName: string;
+  semesterName: string;
+  section: string;
+  degree: string;
+  score: number;
+  gap: number;
+  questionCount: number;
+};
+
+// Everything below the threshold, gathered together
+export type Improvement = {
+  faculty: ImprovementFaculty[];
+  courses: ImprovementCourse[];
+  questions: ImprovementQuestion[];
+  classes: ImprovementClass[];
+};
+
+// How complete and reliable the underlying data is
+export type DataQuality = {
+  validRecords: number;
+  excludedRecords: number;
+  excludedReasons: Record<string, number>;
+  semestersWithQuestionData: number;
+  semestersSupplied: number;
+  note: string;
+};
+
+// One point on a question-tracking line
+export type TrackingPoint = Result & {
+  semesterCode: string;
+  semesterName: string;
+  semesterOrder: number;
+};
+
+// One question tracked for one degree level
+export type TrackedQuestion = {
+  overall: Result;
+  ukpsfCategory: string;
+  ukpsfCode: string;
+  bySemester: TrackingPoint[];
+};
+
+// public/data/question-tracking.json
+export type QuestionTracking = {
+  byDegree: Record<string, Record<string, TrackedQuestion>>;
 };

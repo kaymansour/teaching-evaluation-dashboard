@@ -68,6 +68,32 @@ overview = {
     "byUkpsfCode": metrics["byUkpsfCode"],
     "byQuestion": metrics["byQuestion"],
     "byCourse": metrics["byCourse"],
+    "improvement": metrics["improvement"],
+}
+
+# Data quality figures, so the dashboard can be honest about coverage
+quality_path = PROJECT_ROOT / "data" / "quality" / "excluded_records.csv"
+excluded_total = 0
+excluded_reasons = {}
+if quality_path.exists():
+    import csv
+    with open(quality_path, encoding="utf-8-sig") as handle:
+        for row in csv.DictReader(handle):
+            excluded_total += 1
+            reason = row.get("DataQualityStatus", "UNKNOWN")
+            excluded_reasons[reason] = excluded_reasons.get(reason, 0) + 1
+
+overview["dataQuality"] = {
+    "validRecords": metrics["institution"]["questionCount"],
+    "excludedRecords": excluded_total,
+    "excludedReasons": excluded_reasons,
+    "semestersWithQuestionData": len(metrics["bySemester"]),
+    "semestersSupplied": 4,
+    "note": (
+        "Spring 2022 was supplied as department summaries only, with no "
+        "question-level data. Department and programme fields are absent "
+        "from all evaluation files."
+    ),
 }
 
 # Count how many faculty and courses fall below the target
@@ -117,7 +143,18 @@ with open(WEB_DATA / "faculty-list.json", "w", encoding="utf-8") as f:
     json.dump({"faculty": faculty_list}, f, ensure_ascii=False)
 
 print(f"faculty-list.json    {size_kb(WEB_DATA / 'faculty-list.json'):>7} KB"
-      f"   ({len(faculty_list)} teachers)")
+      f"   ({len(faculty_list)} faculty)")
+
+
+# ---------------------------------------------------------------
+# FILE 3 - QUESTION TRACKING BY DEGREE LEVEL
+# ---------------------------------------------------------------
+
+with open(WEB_DATA / "question-tracking.json", "w", encoding="utf-8") as f:
+    json.dump({"byDegree": metrics["questionTracking"]}, f, ensure_ascii=False)
+
+print(f"question-tracking.json {size_kb(WEB_DATA / 'question-tracking.json'):>5} KB"
+      f"   ({len(metrics['questionTracking'])} degree levels)")
 
 
 # ---------------------------------------------------------------

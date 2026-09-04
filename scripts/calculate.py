@@ -149,6 +149,7 @@ for cc, c_rows in group_by(rows, lambda r: r["CourseCode"]).items():
     by_course[cc] = result
 
 
+
 # For each faculty member, work out their own UKPSF scores,
 # their score in each semester, and each class they taught.
 faculty_detail = {}
@@ -219,6 +220,107 @@ for fid, f_rows in group_by(rows, lambda r: r["FacultyID"]).items():
         "courseCount": len({r["CourseCode"] for r in f_rows}),
         "classCount": len(classes),
     }
+
+
+# --- Requirement 5: track one question for one degree level ----------
+# For every combination of degree level and question, work out the
+# score in each semester. The dashboard lets the user pick one of each.
+question_tracking = {}
+for degree, degree_rows in group_by(rows, lambda r: r["Degree"]).items():
+
+    if not degree:
+        continue
+
+    by_q = {}
+    for q, q_rows in group_by(degree_rows, lambda r: int(r["QuestionNumber"])).items():
+
+        semester_points = []
+        for sem, sem_rows in group_by(q_rows, lambda r: r["SemesterCode"]).items():
+            entry = summarise(sem_rows)
+            entry["semesterCode"] = sem
+            entry["semesterName"] = sem_rows[0]["SemesterName"]
+            entry["semesterOrder"] = int(sem_rows[0]["SemesterOrder"])
+            semester_points.append(entry)
+
+        semester_points.sort(key=lambda s: s["semesterOrder"])
+
+        by_q[str(q)] = {
+            "overall": summarise(q_rows),
+            "ukpsfCategory": q_rows[0]["UKPSFCategory"],
+            "ukpsfCode": q_rows[0]["UKPSFCode"],
+            "bySemester": semester_points,
+        }
+
+    question_tracking[degree] = by_q
+
+
+# --- Requirement 4: everything below the target, in one place --------
+improvement = {}
+
+improvement["faculty"] = sorted(
+    [
+        {
+            "id": fid,
+            "name": data["name"],
+            "score": data["overall"]["score"],
+            "gap": data["overall"]["gap"],
+            "classCount": data["classCount"],
+        }
+        for fid, data in faculty_detail.items()
+        if data["overall"]["status"] == "Improvement Required"
+    ],
+    key=lambda item: item["score"],
+)
+
+improvement["courses"] = sorted(
+    [
+        {
+            "code": code,
+            "name": data["name"],
+            "score": data["score"],
+            "gap": data["gap"],
+            "questionCount": data["questionCount"],
+            "groupCount": data["groupCount"],
+        }
+        for code, data in by_course.items()
+        if data["status"] == "Improvement Required"
+    ],
+    key=lambda item: item["score"],
+)
+
+improvement["questions"] = sorted(
+    [
+        {
+            "number": q,
+            "score": data["score"],
+            "gap": data["gap"],
+            "ukpsfCategory": data["ukpsfCategory"],
+            "ukpsfCode": data["ukpsfCode"],
+        }
+        for q, data in by_question.items()
+        if data["status"] == "Improvement Required"
+    ],
+    key=lambda item: item["score"],
+)
+
+# Individual classes below the target, across all faculty
+weak_classes = []
+for fid, data in faculty_detail.items():
+    for cls in data["classes"]:
+        if cls["status"] == "Improvement Required":
+            weak_classes.append({
+                "facultyId": fid,
+                "facultyName": data["name"],
+                "courseCode": cls["courseCode"],
+                "courseName": cls["courseName"],
+                "semesterName": cls["semesterName"],
+                "section": cls["section"],
+                "degree": cls["degree"],
+                "score": cls["score"],
+                "gap": cls["gap"],
+                "questionCount": cls["questionCount"],
+            })
+improvement["classes"] = sorted(weak_classes, key=lambda item: item["score"])
 
 
 # ---------------------------------------------------------------
@@ -402,6 +504,8 @@ metrics = {
     "byFaculty": by_faculty,
     "byCourse": by_course,
     "facultyDetail": faculty_detail,
+    "questionTracking": question_tracking,
+    "improvement": improvement,
 }
 
 with open(PROCESSED_DIR / "metrics.json", "w", encoding="utf-8") as f:
