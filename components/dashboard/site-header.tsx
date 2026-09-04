@@ -25,7 +25,8 @@ export function SiteHeader() {
     <header className="print:hidden">
       {/* The red band carrying the logo */}
       <div style={{ backgroundColor: "#E0241B" }}>
-        <div className="mx-auto flex max-w-5xl items-center gap-4 px-6 py-3">
+        <div className="relative mx-auto flex max-w-5xl items-center px-6 py-5">
+          {/* Logo pinned to the left */}
           <Link
             href="/"
             className="shrink-0 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
@@ -37,12 +38,14 @@ export function SiteHeader() {
               width={1024}
               height={486}
               priority
-              className="h-10 w-auto"
+              className="h-14 w-auto sm:h-16"
             />
           </Link>
 
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-white">
+          {/* Title centred across the band. On small screens it sits
+              beside the logo instead, so nothing overlaps. */}
+          <div className="ml-4 min-w-0 sm:absolute sm:inset-x-0 sm:ml-0 sm:text-center">
+            <p className="truncate text-base font-semibold text-white sm:text-lg">
               Teaching Evaluation Dashboards
             </p>
             <p className="truncate text-xs text-white/75">
