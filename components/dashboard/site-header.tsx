@@ -34,9 +34,6 @@ export function SiteHeader() {
           <p className="truncate text-xs text-white/80">
             Quality Assurance &middot; Teaching Evaluation
           </p>
-          <p className="hidden truncate text-xs text-white/60 sm:block">
-            UK Professional Standards Framework 2020
-          </p>
         </div>
       </div>
 
