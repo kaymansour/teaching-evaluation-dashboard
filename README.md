@@ -213,16 +213,6 @@ individuals to performance scores.
 
 ---
 
-## Questions for the client
-
-1. What causes the Fall 2021 scores of approximately 400%?
-2. How were the staff summary workbooks produced? They do not agree with the
-   raw evaluation files.
-3. Is a Spring 2022 raw evaluation file available?
-4. May faculty names be published, or should the dashboards be anonymised?
-
----
-
 ## Documentation
 
 | File | Contents |
