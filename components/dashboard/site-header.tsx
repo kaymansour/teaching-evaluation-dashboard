@@ -2,8 +2,9 @@
 
 // components/dashboard/site-header.tsx
 //
-// The band across the top of every page: the college logo, the name
-// of the tool, and links to the two dashboards.
+// The band across the top of every page, following the college's own
+// house style: a thin navy strip, then a white header carrying the
+// logo and the navigation. Red is used only as an accent.
 //
 // "use client" because it highlights whichever page you are on, and
 // that means reading the current address.
@@ -12,8 +13,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+// Colours taken from the college website
+const NAVY = "#171F32";
+const RED = "#CF162D";
+
 const LINKS = [
-  { href: "/overview", label: "Overview" },
+  { href: "/overview", label: "Institutional overview" },
   { href: "/faculty", label: "Faculty report" },
 ];
 
@@ -23,14 +28,26 @@ export function SiteHeader() {
 
   return (
     <header className="print:hidden">
-      {/* The red band carrying the logo */}
-      <div style={{ backgroundColor: "#E0241B" }}>
-        <div className="relative mx-auto flex max-w-5xl items-center px-6 py-5">
-          {/* Logo pinned to the left */}
+      {/* ---------- Thin navy strip ---------- */}
+      <div style={{ backgroundColor: NAVY }}>
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-2">
+          <p className="truncate text-xs text-white/80">
+            Quality Assurance &middot; Teaching Evaluation
+          </p>
+          <p className="hidden truncate text-xs text-white/60 sm:block">
+            UK Professional Standards Framework 2020
+          </p>
+        </div>
+      </div>
+
+      {/* ---------- White header ---------- */}
+      <div className="border-b bg-white">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-4">
+          {/* Logo and title, left */}
           <Link
             href="/"
-            className="shrink-0 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
-            aria-label="Home"
+            className="flex items-center gap-4 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4"
+            style={{ outlineColor: RED }}
           >
             <Image
               src="/ucb_logo.png"
@@ -38,47 +55,44 @@ export function SiteHeader() {
               width={1024}
               height={486}
               priority
-              className="h-14 w-auto sm:h-16"
+              className="h-12 w-auto sm:h-14"
             />
+            <span
+              className="hidden border-l pl-4 text-sm font-medium sm:block"
+              style={{ color: NAVY }}
+            >
+              Teaching Evaluation
+              <span className="block text-xs font-normal text-muted-foreground">
+                Dashboards
+              </span>
+            </span>
           </Link>
 
-          {/* Title centred across the band. On small screens it sits
-              beside the logo instead, so nothing overlaps. */}
-          <div className="ml-4 min-w-0 sm:absolute sm:inset-x-0 sm:ml-0 sm:text-center">
-            <p className="truncate text-base font-semibold text-white sm:text-lg">
-              Teaching Evaluation Dashboards
-            </p>
-            <p className="truncate text-xs text-white/75">
-              UK Professional Standards Framework
-            </p>
-          </div>
+          {/* Navigation, right */}
+          <nav className="flex gap-1">
+            {LINKS.map((link) => {
+              // Mark the link for the page we are on
+              const active = pathname === link.href;
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  aria-current={active ? "page" : undefined}
+                  className={
+                    "rounded px-3 py-2 text-sm transition-colors focus-visible:outline focus-visible:outline-2 " +
+                    (active
+                      ? "font-medium text-white"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground")
+                  }
+                  style={active ? { backgroundColor: RED } : undefined}
+                >
+                  {link.label}
+                </Link>
+              );
+            })}
+          </nav>
         </div>
       </div>
-
-      {/* A quieter strip below it for the navigation */}
-      <nav className="border-b bg-background">
-        <div className="mx-auto flex max-w-5xl gap-1 px-6">
-          {LINKS.map((link) => {
-            // Highlight the link for the page we are on
-            const active = pathname === link.href;
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                aria-current={active ? "page" : undefined}
-                className={
-                  "-mb-px border-b-2 px-3 py-3 text-sm transition-colors focus-visible:outline focus-visible:outline-2 " +
-                  (active
-                    ? "border-[#E0241B] font-medium text-foreground"
-                    : "border-transparent text-muted-foreground hover:border-muted-foreground/30 hover:text-foreground")
-                }
-              >
-                {link.label}
-              </Link>
-            );
-          })}
-        </div>
-      </nav>
     </header>
   );
 }
