@@ -159,7 +159,6 @@ export function OverviewReport({
     .filter((item): item is { label: string; score: number } => item !== null);
 
   const improvement = data.improvement;
-  const quality = data.dataQuality;
 
   return (
     <div className="space-y-12">
@@ -707,94 +706,6 @@ export function OverviewReport({
             </p>
           </div>
         </div>
-      </section>
-
-      {/* ---------- Requirement 8: data quality ---------- */}
-      <section>
-        <h2 className="mb-1 text-lg font-medium">Data quality</h2>
-        <p className="mb-4 text-sm text-muted-foreground">
-          What the figures above are based on, and what they exclude.
-        </p>
-
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription className="text-xs">
-                Valid records used
-              </CardDescription>
-              <CardTitle className="text-2xl tabular-nums">
-                {quality.validRecords.toLocaleString()}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription className="text-xs">
-                Records excluded
-              </CardDescription>
-              <CardTitle className="text-2xl tabular-nums">
-                {quality.excludedRecords.toLocaleString()}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xs text-muted-foreground">
-                {(
-                  (quality.excludedRecords /
-                    (quality.validRecords + quality.excludedRecords)) *
-                  100
-                ).toFixed(1)}
-                % of all records
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription className="text-xs">
-                Semesters with full data
-              </CardDescription>
-              <CardTitle className="text-2xl tabular-nums">
-                {quality.semestersWithQuestionData} of{" "}
-                {quality.semestersSupplied}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription className="text-xs">
-                Classes evaluated
-              </CardDescription>
-              <CardTitle className="text-2xl tabular-nums">
-                {data.institution.groupCount}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-        </div>
-
-        <Card className="mt-4">
-          <CardHeader>
-            <CardTitle className="text-base">Why records were excluded</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <ul className="space-y-1.5">
-              {Object.entries(quality.excludedReasons).map(([reason, count]) => (
-                <li key={reason} className="flex justify-between gap-4">
-                  <span className="text-muted-foreground">
-                    {reason === "INVALID_ABOVE_100"
-                      ? "Score above 100%, which is impossible"
-                      : reason === "NO_DATA"
-                        ? "Blank score, recorded as no data rather than zero"
-                        : reason}
-                  </span>
-                  <span className="tabular-nums">{String(count)}</span>
-                </li>
-              ))}
-            </ul>
-            <p className="text-muted-foreground">{quality.note}</p>
-          </CardContent>
-        </Card>
       </section>
 
       {/* ---------- What is not available ---------- */}
