@@ -599,7 +599,7 @@ function Report({ detail }: { detail: FacultyDetail }) {
                   fontSize={13}
                 />
                 <Tooltip
-                  formatter={(value: number) => [`${value}%`, "Score"]}
+                  formatter={(value: unknown) => [`${Number(value)}%`, "Score"]}
                   cursor={{ fill: "rgba(0,0,0,0.04)" }}
                 />
                 <ReferenceLine
@@ -622,7 +622,7 @@ function Report({ detail }: { detail: FacultyDetail }) {
                   <LabelList
                     dataKey="score"
                     position="right"
-                    formatter={(value: number) => `${value}%`}
+                    formatter={(value: unknown) => `${Number(value)}%`}
                     fontSize={13}
                     fontWeight={600}
                   />
@@ -724,7 +724,9 @@ function Report({ detail }: { detail: FacultyDetail }) {
                     fontSize={12}
                     unit="%"
                   />
-                  <Tooltip formatter={(value: number) => [`${value}%`, "Score"]} />
+                  <Tooltip
+                    formatter={(value: unknown) => [`${Number(value)}%`, "Score"]}
+                  />
                   <ReferenceLine
                     y={target}
                     stroke="#B42318"
@@ -816,9 +818,9 @@ function Report({ detail }: { detail: FacultyDetail }) {
                     ))}
                   </Pie>
                   <Tooltip
-                    formatter={(value: number, name: string) => [
-                      `${value} classes`,
-                      name,
+                    formatter={(value: unknown, name: unknown) => [
+                      `${Number(value)} classes`,
+                      String(name),
                     ]}
                   />
                   <Legend

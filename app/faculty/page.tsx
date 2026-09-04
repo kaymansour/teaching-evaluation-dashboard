@@ -10,7 +10,7 @@ import path from "path";
 
 import type { FacultyList } from "@/types/metrics";
 
-import { FacultyReport } from "@/components/dashboard/facult-report";
+import { FacultyReport } from "@/components/dashboard/faculty-report";
 
 export default async function FacultyPage() {
   // Read the dropdown list from disk
