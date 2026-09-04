@@ -6,6 +6,63 @@
 // If you type result.scoer instead of result.score, it tells you
 // straight away rather than showing "undefined" on the page.
 
+// --- Faculty ---------------------------------------------------
+
+// One entry in the faculty dropdown
+export type FacultyListItem = {
+  id: string;
+  name: string;
+  score: number | null;
+  status: Result["status"];
+  classCount: number;
+  semesters: string[];
+};
+
+// public/data/faculty-list.json
+export type FacultyList = {
+  faculty: FacultyListItem[];
+};
+
+// One class a teacher taught
+export type ClassResult = Result & {
+  semesterCode: string;
+  semesterName: string;
+  semesterOrder: number;
+  courseCode: string;
+  courseName: string;
+  degree: string;
+  section: string;
+  edition: string;
+  evaluatedStudents: string;
+  complete: boolean;
+};
+
+// A teacher's score in one semester
+export type FacultySemester = Result & {
+  semesterName: string;
+  semesterOrder: number;
+};
+
+// public/data/faculty/<id>.json
+export type FacultyDetail = {
+  id: string;
+  name: string;
+  nameRaw: string;
+  overall: Result;
+  ukpsfCategories: Record<string, Result>;
+  ukpsfCodes: Record<string, Result>;
+  bySemester: Record<string, FacultySemester>;
+  byQuestion: Record<string, QuestionResult>;
+  classes: ClassResult[];
+  courseCount: number;
+  classCount: number;
+  benchmarks: {
+    institution: number | null;
+    target: number;
+  };
+};
+
+
 // The standard result block returned for every calculation
 export type Result = {
   score: number | null;
