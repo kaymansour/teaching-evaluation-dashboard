@@ -241,15 +241,6 @@ export function OverviewReport({
             </div>
           </Card>
         </div>
-
-        <p className="mt-3 max-w-3xl text-xs leading-relaxed text-muted-foreground">
-          Enrolment comes from the timetable PDFs, which give the enrolled
-          number for every class section; the evaluation files give the number
-          who answered. Both count places rather than people, so a student
-          enrolled in four evaluated classes counts four times. All{" "}
-          {participation.sectionsWithEnrolment} evaluated class sections
-          carried an enrolment figure.
-        </p>
       </section>
 
       {/* ---------- Evaluation coverage ---------- */}

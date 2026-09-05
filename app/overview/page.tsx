@@ -37,11 +37,6 @@ export default async function OverviewPage() {
           <h1 className="text-3xl font-semibold tracking-tight">
             University Teaching Evaluation Overview
           </h1>
-          <p className="mt-3 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-            Student evaluation results for the whole college, mapped to the UK
-            Professional Standards Framework. Anything scoring below{" "}
-            {data.target}% is flagged as improvement required.
-          </p>
           <dl className="mt-6 flex flex-wrap gap-x-8 gap-y-3 border-t pt-4 text-sm">
             <div className="flex items-baseline gap-2">
               <dt className="text-muted-foreground">Semesters shown</dt>
