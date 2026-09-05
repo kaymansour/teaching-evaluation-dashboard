@@ -811,33 +811,9 @@ function DepartmentSection({
         </div>
 
         {chosen && trend.length > 0 ? (
-          <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
-            <Panel title={selected} keyItems={[thresholdKey(target)]}>
-              <TrendChart data={trend} target={target} />
-            </Panel>
-
-            <div className="space-y-4">
-              {["AA", "CK", "PV"].map((code) => {
-                const result = chosen.ukpsfCategories[code];
-                if (!result) return null;
-                return (
-                  <Card key={code} className="gap-2 p-5">
-                    <p className="text-xs text-muted-foreground">
-                      {CATEGORY_NAMES[code]}
-                    </p>
-                    <p className="text-2xl font-semibold leading-none tracking-tight">
-                      {showScore(result.score)}
-                    </p>
-                    <Meter
-                      score={result.score}
-                      target={target}
-                      className="h-1.5"
-                    />
-                  </Card>
-                );
-              })}
-            </div>
-          </div>
+          <Panel title={selected} keyItems={[thresholdKey(target)]}>
+            <TrendChart data={trend} target={target} />
+          </Panel>
         ) : (
           <Card className="gap-1 p-5">
             <p className="text-sm font-medium">No data</p>
