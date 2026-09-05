@@ -37,12 +37,9 @@ import {
   BAR_SIZE,
   GRID,
   VIZ,
-  degreeColor,
-  degreeRank,
 } from "@/lib/chart-theme";
 
 import {
-  ChartKey,
   ChartTooltip,
   Delta,
   Meter,
@@ -64,10 +61,8 @@ import {
 } from "@/components/dashboard/report-ui";
 
 import {
-  DegreeDonut,
   RankedBars,
   TrendChart,
-  type DegreeSlice,
   type RankedRow,
 } from "@/components/dashboard/report-charts";
 
@@ -254,19 +249,19 @@ export function OverviewReport({
 
         <div className="grid gap-4 sm:grid-cols-3">
           <StatTile
-            label="Faculty evaluated"
+            label="Faculty"
             value={coverage.facultyEvaluated}
             note="teaching staff with results"
           />
           <StatTile
-            label="Courses evaluated"
+            label="Courses"
             value={coverage.coursesEvaluated}
-            note="distinct courses"
+            note="distinct courses evaluated"
           />
           <StatTile
-            label="Class surveys run"
+            label="Surveys"
             value={coverage.classSectionsEvaluated}
-            note={`across ${participation.sectionsEvaluated} timetabled sections`}
+            note={`across ${participation.sectionsEvaluated} class sections`}
           />
         </div>
       </section>
@@ -878,28 +873,6 @@ function ProgrammeSection({
     (a, b) => (b.score ?? 0) - (a.score ?? 0)
   );
 
-  // Group programmes under their department so the Bachelor and
-  // Diploma versions of the same subject sit together, then put each
-  // department's levels in the order of study rather than by score, so
-  // the rings all read the same way round.
-  const departments: Record<string, ProgrammeResult[]> = {};
-  for (const item of all) {
-    if (!departments[item.department]) {
-      departments[item.department] = [];
-    }
-    departments[item.department].push(item);
-  }
-  for (const items of Object.values(departments)) {
-    items.sort((a, b) => degreeRank(a.degree) - degreeRank(b.degree));
-  }
-
-  const departmentNames = Object.keys(departments).sort();
-
-  // The levels actually present, in the order of study, for the key
-  const degreesPresent = [...new Set(all.map((item) => item.degree))].sort(
-    (a, b) => degreeRank(a) - degreeRank(b)
-  );
-
   const chartData = all.map((item) => ({
     label:
       item.name.length > 34 ? item.name.slice(0, 32) + "\u2026" : item.name,
@@ -915,127 +888,6 @@ function ProgrammeSection({
         title="Programme comparison"
         lede={`Average score for each of the ${all.length} degree programmes. A programme is a degree level within a department.`}
       />
-
-      {/* --- Degree levels within each department, drawn as rings --- */}
-      <div className="mb-10">
-        <SubHeading>Degree levels within each department</SubHeading>
-        <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
-          Each ring is one department, split by how much of its evaluated
-          teaching sat at each degree level. The average for the level is
-          printed beside it: where a department teaches at more than one level,
-          the gap between them is often larger than the gap between
-          departments.
-        </p>
-
-        <div className="grid gap-4 lg:grid-cols-2">
-          {departmentNames.map((department) => {
-            const items = departments[department];
-            const scores = items
-              .map((item) => item.score)
-              .filter((score): score is number => score !== null);
-            const spread =
-              scores.length > 1
-                ? Math.round((Math.max(...scores) - Math.min(...scores)) * 10) /
-                  10
-                : null;
-
-            const total = items.reduce(
-              (sum, item) => sum + item.questionCount,
-              0
-            );
-            const slices: DegreeSlice[] = items.map((item) => ({
-              degree: item.degree,
-              answers: item.questionCount,
-              share: total
-                ? Math.round((item.questionCount / total) * 1000) / 10
-                : 0,
-              score: item.score,
-              reliable: item.reliable,
-            }));
-
-            return (
-              <Card key={department} className="gap-4 p-5">
-                <div className="flex items-baseline justify-between gap-3">
-                  <p className="text-sm font-semibold tracking-tight">
-                    {department}
-                  </p>
-                  {spread !== null && (
-                    <p className="shrink-0 text-xs text-muted-foreground">
-                      {spread} point gap
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-5">
-                  <DegreeDonut data={slices} total={total} />
-
-                  {/* The ring's own key. Every slice is named here, so
-                      the colour never has to carry the level on its own. */}
-                  <ul className="min-w-0 flex-1 space-y-2.5">
-                    {slices.map((slice) => (
-                      <li
-                        key={slice.degree}
-                        className="flex items-baseline gap-2.5"
-                      >
-                        <span
-                          aria-hidden
-                          className="size-2.5 shrink-0 translate-y-0.5 rounded-sm"
-                          style={{ backgroundColor: degreeColor(slice.degree) }}
-                        />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm">
-                            {slice.degree}
-                          </span>
-                          <span className="block text-xs tabular-nums text-muted-foreground">
-                            {slice.answers.toLocaleString()} answers &middot;{" "}
-                            {slice.share}%
-                          </span>
-                          {!slice.reliable && (
-                            <span
-                              className="block text-xs"
-                              style={{ color: "var(--status-caution-inline)" }}
-                            >
-                              few answers, treat with caution
-                            </span>
-                          )}
-                        </span>
-                        <span className="shrink-0 text-right">
-                          <span className="block text-sm font-semibold tabular-nums">
-                            {showScore(slice.score)}
-                          </span>
-                          {slice.score !== null && slice.score < target && (
-                            <span
-                              className="block text-xs"
-                              style={{ color: "var(--status-critical-inline)" }}
-                            >
-                              below {target}%
-                            </span>
-                          )}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-
-        <ChartKey
-          items={degreesPresent.map((degree) => ({
-            label: degree,
-            color: degreeColor(degree),
-          }))}
-        />
-
-        <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-          The rings are sized by survey answers, not by score. A score is an
-          average, not a share of anything, so it cannot be divided into
-          slices; what a ring can honestly show is how a department&rsquo;s
-          evaluated teaching was spread across its levels. Read the ring for
-          the mix and the figures beside it for the result.
-        </p>
-      </div>
 
       {/* --- The comparison chart --- */}
       <Panel keyItems={[thresholdKey(target), ...statusKeys(target)]}>
