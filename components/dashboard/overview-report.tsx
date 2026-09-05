@@ -151,7 +151,7 @@ export function OverviewReport({
           <Card className="justify-between gap-6 p-6">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Overall teaching score
+                Institutional average
               </p>
               <p className="mt-3 text-6xl font-semibold leading-none tracking-tight">
                 {showScore(data.institution.score)}
@@ -188,7 +188,7 @@ export function OverviewReport({
           <Card className="justify-between gap-6 p-6">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Student response coverage
+                Students reached
               </p>
               <p className="mt-3 text-6xl font-semibold leading-none tracking-tight">
                 {participation.responseRate === null
@@ -196,7 +196,7 @@ export function OverviewReport({
                   : `${participation.responseRate}%`}
               </p>
               <p className="mt-4 text-sm text-muted-foreground">
-                of enrolled students covered by an evaluation return
+                of enrolled students are represented in the results
               </p>
             </div>
 
@@ -206,7 +206,7 @@ export function OverviewReport({
                   className="h-2.5 w-full overflow-hidden rounded-full"
                   style={{ backgroundColor: VIZ.meetsTrack }}
                   role="img"
-                  aria-label={`${participation.responseRate}% of enrolled students covered by an evaluation return`}
+                  aria-label={`${participation.responseRate}% of enrolled students are represented in the results`}
                 >
                   <div
                     className="h-full rounded-full"
@@ -221,7 +221,7 @@ export function OverviewReport({
               <dl className="grid grid-cols-2 gap-4 border-t pt-4">
                 <div>
                   <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Eligible students
+                    Enrolled
                   </dt>
                   <dd className="mt-1 text-2xl font-semibold tabular-nums">
                     {participation.eligibleStudents === null
@@ -231,7 +231,7 @@ export function OverviewReport({
                 </div>
                 <div>
                   <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Students responded
+                    Represented in results
                   </dt>
                   <dd className="mt-1 text-2xl font-semibold tabular-nums">
                     {participation.studentsRespondedMatched === null
@@ -240,15 +240,6 @@ export function OverviewReport({
                   </dd>
                 </div>
               </dl>
-
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                Enrolment comes from the timetable PDFs, and is available for{" "}
-                {participation.sectionsWithEnrolment.toLocaleString()} of the{" "}
-                {participation.sectionsEvaluated.toLocaleString()} evaluated
-                sections. The evaluation files do not define what their student
-                count records, so treat this as indicative rather than a
-                measured response rate.
-              </p>
             </div>
           </Card>
         </div>
