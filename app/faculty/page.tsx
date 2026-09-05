@@ -23,19 +23,44 @@ export default async function FacultyPage() {
   const text = await fs.readFile(filePath, "utf-8");
   const list = JSON.parse(text) as FacultyList;
 
-  return (
-    <main className="mx-auto max-w-5xl px-6 py-10">
-      <header className="mb-8">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Individual faculty report
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Select a faculty member to see their teaching evaluation results
-          against the UK Professional Standards Framework.
-        </p>
-      </header>
+  const withResults = list.faculty.length;
+  const belowThreshold = list.faculty.filter(
+    (person) => person.status === "Improvement Required"
+  ).length;
 
-      <FacultyReport faculty={list.faculty} />
-    </main>
+  return (
+    // The same tinted plane as the overview, so the two dashboards
+    // read as one product. It prints white.
+    <div className="dashboard-plane flex-1 bg-[var(--plane)]">
+      <main className="mx-auto max-w-6xl px-6 py-10">
+        <header className="mb-10 print:hidden">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Individual report
+          </p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight">
+            Faculty teaching evaluation
+          </h1>
+          <p className="mt-3 max-w-3xl text-sm leading-relaxed text-muted-foreground">
+            Select a faculty member to see their teaching evaluation results
+            against the UK Professional Standards Framework. Every report can
+            be downloaded as a PDF.
+          </p>
+          <dl className="mt-6 flex flex-wrap gap-x-8 gap-y-3 border-t pt-4 text-sm">
+            <div className="flex items-baseline gap-2">
+              <dt className="text-muted-foreground">Faculty with results</dt>
+              <dd className="font-medium tabular-nums">{withResults}</dd>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <dt className="text-muted-foreground">
+                Below the threshold
+              </dt>
+              <dd className="font-medium tabular-nums">{belowThreshold}</dd>
+            </div>
+          </dl>
+        </header>
+
+        <FacultyReport faculty={list.faculty} />
+      </main>
+    </div>
   );
 }

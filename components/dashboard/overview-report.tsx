@@ -9,16 +9,13 @@
 // lib/chart-theme.ts. Nothing here carries a raw hex value, so the
 // whole dashboard moves together when a token changes.
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 
 import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
   LabelList,
-  Line,
-  LineChart,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -35,16 +32,37 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+import { AXIS_TICK, BAR_SIZE, GRID, VIZ } from "@/lib/chart-theme";
+
 import {
-  AXIS_TICK,
-  BAR_SIZE,
-  DOT_RADIUS,
-  GRID,
-  LINE_WIDTH,
-  VIZ,
-  scoreColor,
-  scoreTrack,
-} from "@/lib/chart-theme";
+  ChartTooltip,
+  Delta,
+  Meter,
+  Panel,
+  RankedBars,
+  SectionHeader,
+  StatTile,
+  StatusPill,
+  SubHeading,
+  TableShell,
+  Thead,
+  TrendChart,
+  TD,
+  TD_R,
+  TH_L,
+  TH_R,
+  TR,
+  showScore,
+  statusKeys,
+  thresholdKey,
+  type RankedRow,
+} from "@/components/dashboard/report-ui";
+
+import {
+  CATEGORY_MEANING,
+  CATEGORY_NAMES,
+  QUESTION_TEXT,
+} from "@/lib/survey";
 
 import type {
   DepartmentResult,
@@ -52,332 +70,6 @@ import type {
   ProgrammeResult,
   QuestionTracking,
 } from "@/types/metrics";
-
-// The full wording of each survey question
-const QUESTION_TEXT: Record<string, string> = {
-  "1": "Provides students with a copy of the course syllabus in the first week",
-  "2": "Is committed to the course syllabus and presents it in an organised manner",
-  "3": "Is keen to start and end lectures on time",
-  "4": "Is keen to follow up on students' attendance",
-  "5": "Inculcates students with values of virtue, morality and national loyalty",
-  "6": "Receives questions and suggestions, respects viewpoints, encourages criticism",
-  "7": "Uses lecture time in productive, effective instruction",
-  "8": "Emphasises fairness and avoids bias in dealing with students",
-  "9": "Prepares tests that are comprehensive, well timed and fairly weighted",
-  "10": "Corrects exams, reports and homework and hands them back",
-  "11": "Reviews exams with students",
-  "12": "Uses information technology and learning resources in teaching",
-  "13": "Creates a comfortable classroom environment during lectures and exams",
-  "14": "Is committed to office hours and gives students enough time",
-  "15": "Is considerate of appearance, language and academic norms",
-  "16": "Encourages and stimulates students to enhance learning and motivation",
-  "17": "Enriches class discussions and increases student interest",
-  "18": "Shows knowledge of course materials and subjects",
-  "19": "Assigns homework, reading and research using library and e-resources",
-  "20": "Treats students in a friendly, respectful manner and sets a good example",
-};
-
-const CATEGORY_NAMES: Record<string, string> = {
-  AA: "Areas of Activity",
-  CK: "Core Knowledge",
-  PV: "Professional Values",
-};
-
-const CATEGORY_MEANING: Record<string, string> = {
-  AA: "What the faculty member does in class",
-  CK: "What the faculty member knows about the subject",
-  PV: "How the faculty member treats students",
-};
-
-// ---------- Shared pieces ----------
-
-function showScore(score: number | null) {
-  if (score === null) return "\u2014";
-  return `${score}%`;
-}
-
-// A signed difference. The sign carries the meaning, so the colour is
-// reinforcement rather than the only channel.
-function Delta({ value }: { value: number | null }) {
-  if (value === null) {
-    return <span className="text-muted-foreground">{"\u2014"}</span>;
-  }
-  const positive = value >= 0;
-  return (
-    <span
-      className="tabular-nums"
-      style={{
-        color: positive
-          ? "var(--status-good-inline)"
-          : "var(--status-critical-inline)",
-      }}
-    >
-      {positive ? "+" : "\u2212"}
-      {Math.abs(value)}
-    </span>
-  );
-}
-
-// A status always ships with its written label; the dot is only a cue.
-function StatusPill({ status }: { status: string }) {
-  const needsWork = status === "Improvement Required";
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium"
-      style={{
-        backgroundColor: needsWork
-          ? "var(--status-critical-wash)"
-          : "var(--status-good-wash)",
-        color: needsWork
-          ? "var(--status-critical-inline)"
-          : "var(--status-good-inline)",
-      }}
-    >
-      <span
-        aria-hidden
-        className="size-1.5 shrink-0 rounded-full"
-        style={{
-          backgroundColor: needsWork
-            ? "var(--status-critical)"
-            : "var(--status-good)",
-        }}
-      />
-      {needsWork ? "Improvement required" : "Acceptable"}
-    </span>
-  );
-}
-
-// A score against the threshold. The track is a lighter step of the
-// fill's own colour, so the state reads across the whole bar.
-function Meter({
-  score,
-  target,
-  className = "h-2",
-}: {
-  score: number | null;
-  target: number;
-  className?: string;
-}) {
-  if (score === null) return null;
-  return (
-    <div
-      className={"relative w-full overflow-hidden rounded-full " + className}
-      style={{ backgroundColor: scoreTrack(score, target) }}
-      role="img"
-      aria-label={`${score}% against a ${target}% threshold`}
-    >
-      <div
-        className="h-full rounded-full"
-        style={{
-          width: `${Math.min(score, 100)}%`,
-          backgroundColor: scoreColor(score, target),
-        }}
-      />
-      <div
-        aria-hidden
-        className="absolute inset-y-0 w-px bg-foreground/45"
-        style={{ left: `${target}%` }}
-      />
-    </div>
-  );
-}
-
-function SectionHeader({ title, lede }: { title: string; lede: ReactNode }) {
-  return (
-    <div className="mb-6 border-b pb-4">
-      <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
-      <p className="mt-1.5 max-w-3xl text-sm text-muted-foreground">{lede}</p>
-    </div>
-  );
-}
-
-function SubHeading({ children }: { children: ReactNode }) {
-  return (
-    <h3 className="mb-3 text-sm font-semibold tracking-tight">{children}</h3>
-  );
-}
-
-// A card built to hold a chart: a title, the plot, then an optional
-// key and caption underneath.
-function Panel({
-  title,
-  children,
-  keyItems,
-  caption,
-  className = "",
-}: {
-  title?: ReactNode;
-  children: ReactNode;
-  keyItems?: KeyItem[];
-  caption?: ReactNode;
-  className?: string;
-}) {
-  return (
-    <Card className={"gap-0 p-5 " + className}>
-      {title ? (
-        <p className="mb-4 text-sm font-medium leading-snug">{title}</p>
-      ) : null}
-      {children}
-      {keyItems ? <ChartKey items={keyItems} /> : null}
-      {caption ? (
-        <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-          {caption}
-        </p>
-      ) : null}
-    </Card>
-  );
-}
-
-type KeyItem = { label: string; color: string; dashed?: boolean };
-
-// The identity channel. Every chart that encodes something in colour
-// says so here in words, so colour never carries meaning alone.
-function ChartKey({ items }: { items: KeyItem[] }) {
-  return (
-    <ul className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t pt-3">
-      {items.map((item) => (
-        <li
-          key={item.label}
-          className="flex items-center gap-2 text-xs text-muted-foreground"
-        >
-          {item.dashed ? (
-            <span
-              aria-hidden
-              className="h-0 w-4 shrink-0 border-t-2 border-dashed"
-              style={{ borderColor: item.color }}
-            />
-          ) : (
-            <span
-              aria-hidden
-              className="size-2.5 shrink-0 rounded-sm"
-              style={{ backgroundColor: item.color }}
-            />
-          )}
-          {item.label}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-// The threshold key, used by every chart that draws the line
-function thresholdKey(target: number): KeyItem {
-  return { label: `${target}% threshold`, color: VIZ.threshold, dashed: true };
-}
-
-// The pass/fail key, used by every chart whose marks are coloured by
-// where they sit against the threshold
-function statusKeys(target: number): KeyItem[] {
-  return [
-    { label: `Meets the ${target}% threshold`, color: VIZ.meets },
-    { label: "Improvement required", color: VIZ.below },
-  ];
-}
-
-// One tooltip for the whole dashboard, styled like the cards.
-type TooltipRow = { full?: string; answers?: number };
-
-function ChartTooltip({
-  active,
-  payload,
-  label,
-  valueLabel = "Average",
-}: {
-  active?: boolean;
-  payload?: { value?: number | string; payload?: TooltipRow }[];
-  label?: string | number;
-  valueLabel?: string;
-}) {
-  if (!active || !payload || payload.length === 0) return null;
-  const row = payload[0]?.payload ?? {};
-  const value = payload[0]?.value;
-  return (
-    <div className="rounded-lg bg-card px-3 py-2 shadow-lg ring-1 ring-foreground/10">
-      <p className="text-xs font-medium">{row.full ?? label}</p>
-      <p className="mt-1 flex items-baseline gap-2">
-        <span className="text-xs text-muted-foreground">{valueLabel}</span>
-        <span className="text-sm font-semibold tabular-nums">{value}%</span>
-      </p>
-      {row.answers !== undefined ? (
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          {row.answers.toLocaleString()} answers
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-// Only the final point on a line is labelled; the axis and the tooltip
-// carry the rest. A number beside every dot goes unread.
-//
-// This has to be a valueAccessor rather than a formatter: Recharts
-// calls a label formatter with the value alone, so there is no index
-// to test. valueAccessor receives one, but only when the LabelList
-// carries no dataKey of its own.
-function endpointOnly(length: number) {
-  return (entry: { payload?: { score?: number } }, index: number) =>
-    index === length - 1 ? `${entry.payload?.score}%` : "";
-}
-
-// Table styling, kept in one place so every table matches.
-// The alignment utilities are held apart rather than concatenated onto
-// one base string, since two conflicting Tailwind classes on the same
-// element resolve by stylesheet order, not by the order written.
-const TH = "px-4 py-2.5 text-xs font-medium uppercase tracking-wide";
-const TH_L = TH + " text-left";
-const TH_R = TH + " text-right";
-const TD = "px-4 py-2.5 align-middle";
-const TD_R = TD + " text-right tabular-nums";
-const TR = "border-b transition-colors last:border-0 hover:bg-muted/40";
-
-function TableShell({ children }: { children: ReactNode }) {
-  return (
-    <div className="overflow-x-auto rounded-xl bg-card ring-1 ring-foreground/10">
-      <table className="w-full border-collapse text-sm">{children}</table>
-    </div>
-  );
-}
-
-function Thead({ children }: { children: ReactNode }) {
-  return (
-    <thead className="border-b bg-muted/40 text-muted-foreground">
-      {children}
-    </thead>
-  );
-}
-
-// A supporting figure beside the headline. Big numbers take the font's
-// proportional figures; tabular digits are for columns that align.
-function StatTile({
-  label,
-  value,
-  note,
-  flagged = false,
-}: {
-  label: string;
-  value: number;
-  note: string;
-  flagged?: boolean;
-}) {
-  return (
-    <Card className="gap-2 p-5">
-      <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {flagged ? (
-          <span
-            aria-hidden
-            className="size-1.5 shrink-0 rounded-full"
-            style={{ backgroundColor: "var(--status-critical)" }}
-          />
-        ) : null}
-        {label}
-      </p>
-      <p className="text-4xl font-semibold leading-none tracking-tight">
-        {value.toLocaleString()}
-      </p>
-      <p className="text-sm text-muted-foreground">{note}</p>
-    </Card>
-  );
-}
 
 // The strongest / weakest question lists
 function QuestionList({
@@ -408,155 +100,6 @@ function QuestionList({
         </li>
       ))}
     </ol>
-  );
-}
-
-// Score over time. The same plot serves the institution, a department
-// and a tracked question, so they stay identical to read.
-type TrendPoint = { label: string; score: number; answers: number };
-
-function TrendChart({
-  data,
-  target,
-  valueLabel = "Average",
-}: {
-  data: TrendPoint[];
-  target: number;
-  valueLabel?: string;
-}) {
-  return (
-    <div className="h-64 w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 24, right: 44, left: 0, bottom: 4 }}>
-          <CartesianGrid {...GRID} vertical={false} />
-          <XAxis
-            dataKey="label"
-            tickLine={false}
-            axisLine={{ stroke: VIZ.grid }}
-            tick={AXIS_TICK}
-            tickMargin={8}
-          />
-          <YAxis
-            domain={[0, 100]}
-            tickLine={false}
-            axisLine={false}
-            tick={AXIS_TICK}
-            unit="%"
-            width={44}
-          />
-          <Tooltip
-            content={<ChartTooltip valueLabel={valueLabel} />}
-            cursor={{ stroke: VIZ.grid, strokeWidth: 1 }}
-          />
-          <ReferenceLine y={target} stroke={VIZ.threshold} strokeDasharray="4 4" />
-          <Line
-            type="monotone"
-            dataKey="score"
-            stroke={VIZ.meets}
-            strokeWidth={LINE_WIDTH}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            dot={{
-              r: DOT_RADIUS,
-              fill: VIZ.meets,
-              stroke: VIZ.surface,
-              strokeWidth: 2,
-            }}
-            activeDot={{
-              r: DOT_RADIUS + 2,
-              fill: VIZ.meets,
-              stroke: VIZ.surface,
-              strokeWidth: 2,
-            }}
-            animationDuration={700}
-          >
-            <LabelList
-              position="top"
-              offset={12}
-              fill={VIZ.ink}
-              fontSize={12}
-              fontWeight={600}
-              valueAccessor={endpointOnly(data.length)}
-            />
-          </Line>
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-// A ranked horizontal comparison. The value rides each bar, so the
-// x-axis is dropped: direct labels come before gridlines.
-type RankedRow = { label: string; full: string; score: number };
-
-function RankedBars({
-  data,
-  target,
-  height,
-  barSize = BAR_SIZE,
-  labelWidth,
-  fontSize = 12,
-  benchmark = null,
-}: {
-  data: RankedRow[];
-  target: number;
-  height: string;
-  barSize?: number;
-  labelWidth: number;
-  fontSize?: number;
-  benchmark?: number | null;
-}) {
-  return (
-    <div className={"w-full " + height}>
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart
-          data={data}
-          layout="vertical"
-          margin={{ top: 4, right: 56, left: 0, bottom: 4 }}
-        >
-          <XAxis type="number" domain={[0, 100]} hide />
-          <YAxis
-            type="category"
-            dataKey="label"
-            width={labelWidth}
-            tickLine={false}
-            axisLine={false}
-            tick={{ ...AXIS_TICK, fontSize }}
-          />
-          <Tooltip
-            content={<ChartTooltip valueLabel="Average" />}
-            cursor={{ fill: "var(--chart-grid)", fillOpacity: 0.5 }}
-          />
-          <ReferenceLine x={target} stroke={VIZ.threshold} strokeDasharray="4 4" />
-          {benchmark !== null && (
-            <ReferenceLine
-              x={benchmark}
-              stroke={VIZ.benchmark}
-              strokeDasharray="2 3"
-            />
-          )}
-          <Bar
-            dataKey="score"
-            radius={[0, 4, 4, 0]}
-            maxBarSize={barSize}
-            animationDuration={700}
-          >
-            {data.map((entry) => (
-              <Cell key={entry.full} fill={scoreColor(entry.score, target)} />
-            ))}
-            <LabelList
-              dataKey="score"
-              position="right"
-              offset={10}
-              fill={VIZ.ink}
-              fontSize={fontSize}
-              fontWeight={600}
-              formatter={(value: unknown) => `${Number(value)}%`}
-            />
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
   );
 }
 

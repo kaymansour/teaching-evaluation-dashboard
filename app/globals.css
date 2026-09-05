@@ -241,3 +241,15 @@
     background: white !important;
   }
 }
+
+/* The sortable column headings are buttons, and the print rules above
+   hide every button. Keep their label in the printed report; only the
+   sort arrow, which means nothing on paper, is dropped. */
+@media print {
+  thead button {
+    display: inline !important;
+  }
+  thead button > span {
+    display: none !important;
+  }
+}
