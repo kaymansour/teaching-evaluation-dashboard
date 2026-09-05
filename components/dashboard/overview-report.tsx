@@ -84,38 +84,6 @@ import type {
   QuestionTracking,
 } from "@/types/metrics";
 
-// The strongest / weakest question lists
-function QuestionList({
-  items,
-  target,
-}: {
-  items: [string, { score: number | null }][];
-  target: number;
-}) {
-  return (
-    <ol className="space-y-4">
-      {items.map(([number, result]) => (
-        <li key={number}>
-          <div className="flex items-baseline justify-between gap-4">
-            <span className="text-sm leading-snug">
-              <span className="font-medium tabular-nums text-muted-foreground">
-                Q{number}
-              </span>{" "}
-              {QUESTION_TEXT[number]}
-            </span>
-            <span className="shrink-0 text-sm font-semibold tabular-nums">
-              {showScore(result.score)}
-            </span>
-          </div>
-          <div className="mt-2">
-            <Meter score={result.score} target={target} className="h-1.5" />
-          </div>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
 // ---------- The report ----------
 
 export function OverviewReport({
@@ -135,19 +103,12 @@ export function OverviewReport({
     a[0].localeCompare(b[0])
   );
 
+  // Only the weakest question is still named, in the note that stands in
+  // for the improvement table when nothing falls below the threshold.
   const questions = Object.entries(data.byQuestion).sort(
     (a, b) => (b[1].score ?? 0) - (a[1].score ?? 0)
   );
-  const strongest = questions.slice(0, 5);
   const weakest = [...questions].reverse().slice(0, 5);
-
-  // How far apart the best and worst questions actually are
-  const questionSpread =
-    Math.round(
-      ((questions[0]?.[1].score ?? 0) -
-        (questions[questions.length - 1]?.[1].score ?? 0)) *
-        10
-    ) / 10;
 
   const semesterChart = semesters
     .filter((s) => s.score !== null)
@@ -415,23 +376,8 @@ export function OverviewReport({
         </div>
       </section>
 
-      {/* ---------- Requirement 8: best and worst questions ---------- */}
-      <section>
-        <SectionHeader
-          title="Strongest and weakest questions"
-          lede={`Where the college does best and least well across all evaluations. All twenty questions fall within ${questionSpread} points of each other, so these bars sit close together by design.`}
-        />
-
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Panel title="Five strongest" keyItems={[thresholdKey(target)]}>
-            <QuestionList items={strongest} target={target} />
-          </Panel>
-
-          <Panel title="Five weakest" keyItems={[thresholdKey(target)]}>
-            <QuestionList items={weakest} target={target} />
-          </Panel>
-        </div>
-      </section>
+      {/* ---------- Requirement 5: question tracking ---------- */}
+      <QuestionTrackingSection tracking={tracking} target={target} />
 
       {/* ---------- Requirement 4: improvement required ---------- */}
       <section>
@@ -550,8 +496,6 @@ export function OverviewReport({
         </div>
       </section>
 
-      {/* ---------- Requirement 5: question tracking ---------- */}
-      <QuestionTrackingSection tracking={tracking} target={target} />
     </div>
   );
 }
