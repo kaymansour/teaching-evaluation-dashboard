@@ -541,7 +541,7 @@ function QuestionTrackingSection({
             Degree programme
           </label>
           <Select value={degree} onValueChange={setDegree}>
-            <SelectTrigger id="degree-select" className="w-48">
+            <SelectTrigger id="degree-select" className="w-48 bg-card">
               <SelectValue placeholder="Choose a degree" />
             </SelectTrigger>
             <SelectContent>
@@ -562,7 +562,13 @@ function QuestionTrackingSection({
             Survey question
           </label>
           <Select value={question} onValueChange={setQuestion}>
-            <SelectTrigger id="question-select" className="w-full sm:w-[28rem]">
+            {/* Wide enough for the longest question, and the value is a
+                block rather than a flex row so an overlong one ends in an
+                ellipsis instead of being cut off mid-word. */}
+            <SelectTrigger
+              id="question-select"
+              className="w-full max-w-full bg-card sm:w-[40rem] *:data-[slot=select-value]:block *:data-[slot=select-value]:truncate"
+            >
               <SelectValue placeholder="Choose a question" />
             </SelectTrigger>
             <SelectContent>
@@ -1019,16 +1025,6 @@ function ProgrammeSection({
           </TableShell>
         </div>
       )}
-
-      <p className="mt-6 max-w-3xl text-xs leading-relaxed text-muted-foreground">
-        The source data contains no field named &ldquo;Programme&rdquo;. A
-        programme here is a degree level within a department, which is how a
-        degree of study is normally described. Both fields come from the
-        supplied data: degree level from the evaluation files, department from
-        the timetable PDFs. Programmes based on fewer than 100 survey answers
-        are marked, since a score drawn from one small class is far less
-        dependable than one drawn from hundreds.
-      </p>
     </section>
   );
 }
