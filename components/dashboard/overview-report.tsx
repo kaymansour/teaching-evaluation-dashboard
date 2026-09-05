@@ -188,7 +188,7 @@ export function OverviewReport({
           <Card className="justify-between gap-6 p-6">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Student participation
+                Student response coverage
               </p>
               <p className="mt-3 text-6xl font-semibold leading-none tracking-tight">
                 {participation.responseRate === null
@@ -196,7 +196,7 @@ export function OverviewReport({
                   : `${participation.responseRate}%`}
               </p>
               <p className="mt-4 text-sm text-muted-foreground">
-                of eligible students responded
+                of enrolled students covered by an evaluation return
               </p>
             </div>
 
@@ -206,7 +206,7 @@ export function OverviewReport({
                   className="h-2.5 w-full overflow-hidden rounded-full"
                   style={{ backgroundColor: VIZ.meetsTrack }}
                   role="img"
-                  aria-label={`${participation.responseRate}% of eligible students responded`}
+                  aria-label={`${participation.responseRate}% of enrolled students covered by an evaluation return`}
                 >
                   <div
                     className="h-full rounded-full"
@@ -234,10 +234,21 @@ export function OverviewReport({
                     Students responded
                   </dt>
                   <dd className="mt-1 text-2xl font-semibold tabular-nums">
-                    {participation.studentsResponded.toLocaleString()}
+                    {participation.studentsRespondedMatched === null
+                      ? "—"
+                      : participation.studentsRespondedMatched.toLocaleString()}
                   </dd>
                 </div>
               </dl>
+
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Enrolment comes from the timetable PDFs, and is available for{" "}
+                {participation.sectionsWithEnrolment.toLocaleString()} of the{" "}
+                {participation.sectionsEvaluated.toLocaleString()} evaluated
+                sections. The evaluation files do not define what their student
+                count records, so treat this as indicative rather than a
+                measured response rate.
+              </p>
             </div>
           </Card>
         </div>
@@ -262,9 +273,9 @@ export function OverviewReport({
             note="distinct courses"
           />
           <StatTile
-            label="Class sections evaluated"
+            label="Class surveys run"
             value={coverage.classSectionsEvaluated}
-            note={`surveys across ${participation.sectionsEvaluated} timetabled sections`}
+            note={`across ${participation.sectionsEvaluated} timetabled sections`}
           />
         </div>
       </section>

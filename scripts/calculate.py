@@ -371,6 +371,10 @@ eligible = sum(enrolment[k] for k in sections_matched)
 participation = {
     "eligibleStudents": eligible if enrolment else None,
     "studentsResponded": responded,
+    # The respondents from the sections that also carry an enrolment
+    # figure. This is the numerator of the rate below, so it is the
+    # only respondent total that divides into eligibleStudents.
+    "studentsRespondedMatched": responded_matched if enrolment else None,
     "responseRate": (round(responded_matched / eligible * 100, 1)
                      if eligible else None),
     # The rate is worked out from the sections that carry both figures,

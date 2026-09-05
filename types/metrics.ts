@@ -122,10 +122,17 @@ export type OverviewData = {
 
 // Who was asked, and who answered. Enrolment comes from the timetable
 // PDFs; the evaluation files carry only the number who answered, so
-// eligibleStudents and responseRate are null when that lookup is absent.
+// eligibleStudents, studentsRespondedMatched and responseRate are null
+// when that lookup is absent.
+//
+// studentsResponded is the overall total across every evaluated
+// section; studentsRespondedMatched counts only the sections that also
+// carry an enrolment figure, so it is the one that divides into
+// eligibleStudents to give responseRate.
 export type Participation = {
   eligibleStudents: number | null;
   studentsResponded: number;
+  studentsRespondedMatched: number | null;
   responseRate: number | null;
   sectionsEvaluated: number;
   sectionsWithEnrolment: number;
