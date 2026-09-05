@@ -39,14 +39,12 @@ import {
   Delta,
   Meter,
   Panel,
-  RankedBars,
   SectionHeader,
   StatTile,
   StatusPill,
   SubHeading,
   TableShell,
   Thead,
-  TrendChart,
   TD,
   TD_R,
   TH_L,
@@ -55,8 +53,13 @@ import {
   showScore,
   statusKeys,
   thresholdKey,
-  type RankedRow,
 } from "@/components/dashboard/report-ui";
+
+import {
+  RankedBars,
+  TrendChart,
+  type RankedRow,
+} from "@/components/dashboard/report-charts";
 
 import {
   CATEGORY_MEANING,
