@@ -150,6 +150,15 @@
   --viz-threshold: #d03b3b;
   --viz-benchmark: #8b8d95;
 
+  /* Degree level. An ordered set, not four unrelated things, so it
+     takes one hue stepped light to dark from Foundation up to Master
+     rather than four competing colours. Steps of the same blue ramp
+     --viz-meets is drawn from, and the lightest clears the surface. */
+  --viz-degree-1: #86b6ef;
+  --viz-degree-2: #3987e5;
+  --viz-degree-3: #1c5cab;
+  --viz-degree-4: #0d366b;
+
   /* Status. Always carried with a written label, never colour alone. */
   --status-good: #0ca30c;
   --status-good-inline: #006300;
@@ -175,6 +184,14 @@
   --viz-below-track: #4a2222;
   --viz-threshold: #e66767;
   --viz-benchmark: #8b8d95;
+
+  /* The same ramp re-stepped for the dark surface, running the other
+     way: on a dark plane "further along" means further from the
+     surface, so Master is the lightest step here. */
+  --viz-degree-1: #184f95;
+  --viz-degree-2: #2a78d6;
+  --viz-degree-3: #6da7ec;
+  --viz-degree-4: #b7d3f6;
 
   --status-good: #0ca30c;
   --status-good-inline: #57c957;

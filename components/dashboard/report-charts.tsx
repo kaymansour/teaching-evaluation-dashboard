@@ -14,6 +14,8 @@ import {
   LabelList,
   Line,
   LineChart,
+  Pie,
+  PieChart,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -28,6 +30,7 @@ import {
   GRID,
   LINE_WIDTH,
   VIZ,
+  degreeColor,
   scoreColor,
 } from "@/lib/chart-theme";
 
@@ -178,6 +181,107 @@ export function RankedBars({
           </Bar>
         </BarChart>
       </ResponsiveContainer>
+    </div>
+  );
+}
+
+// The share of a department's survey answers that came from each of
+// its degree levels. Answers rather than score, because a score is not
+// a part of a whole and a ring drawn from one would be a lie; the
+// score for each level is printed beside the ring instead.
+export type DegreeSlice = {
+  degree: string;
+  answers: number;
+  share: number;
+  score: number | null;
+  /** False when the level rests on too few answers to lean on. */
+  reliable: boolean;
+};
+
+function DonutTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: { payload?: DegreeSlice }[];
+}) {
+  const slice = payload?.[0]?.payload;
+  if (!active || !slice) return null;
+  return (
+    <div className="rounded-lg bg-card px-3 py-2 shadow-lg ring-1 ring-foreground/10">
+      <p className="text-xs font-medium">{slice.degree}</p>
+      <p className="mt-1 flex items-baseline gap-2">
+        <span className="text-xs text-muted-foreground">Answers</span>
+        <span className="text-sm font-semibold tabular-nums">
+          {slice.answers.toLocaleString()}
+        </span>
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {slice.share}% of the department
+        </span>
+      </p>
+      {slice.score !== null && (
+        <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
+          Average {slice.score}%
+        </p>
+      )}
+      {!slice.reliable && (
+        <p
+          className="mt-0.5 text-xs"
+          style={{ color: "var(--status-caution-inline)" }}
+        >
+          Few answers, treat with caution
+        </p>
+      )}
+    </div>
+  );
+}
+
+export function DegreeDonut({
+  data,
+  total,
+  size = 148,
+}: {
+  data: DegreeSlice[];
+  /** Printed in the hole, where a donut otherwise wastes its middle. */
+  total: number;
+  size?: number;
+}) {
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Tooltip content={<DonutTooltip />} />
+          <Pie
+            data={data}
+            dataKey="answers"
+            nameKey="degree"
+            innerRadius="62%"
+            outerRadius="100%"
+            startAngle={90}
+            endAngle={-270}
+            paddingAngle={2}
+            stroke="var(--card)"
+            strokeWidth={2}
+            // Drawn in one go. Recharts renders no sector path at all
+            // on the first frame of a pie animation, so a ring that is
+            // captured or printed before the animation runs comes out
+            // empty; a 148px ring gains nothing from a spin-in anyway.
+            isAnimationActive={false}
+          >
+            {data.map((slice) => (
+              <Cell key={slice.degree} fill={degreeColor(slice.degree)} />
+            ))}
+          </Pie>
+        </PieChart>
+      </ResponsiveContainer>
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-base font-semibold leading-none tabular-nums">
+          {total.toLocaleString()}
+        </span>
+        <span className="mt-1 text-[11px] leading-none text-muted-foreground">
+          answers
+        </span>
+      </div>
     </div>
   );
 }

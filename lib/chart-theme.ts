@@ -56,3 +56,36 @@ export const GRID = {
 export const BAR_SIZE = 22;
 export const LINE_WIDTH = 2;
 export const DOT_RADIUS = 4;
+
+// ---------- Degree level ----------
+//
+// Degree level is an ordered dimension, not a set of unrelated
+// categories, so it is drawn as one hue stepped light to dark rather
+// than four competing colours. The order below is the order of study,
+// and it is the order the steps are handed out in, so the same level
+// keeps the same step in every chart.
+export const DEGREE_ORDER = [
+  "Foundation",
+  "Diploma",
+  "Bachelor",
+  "Master",
+] as const;
+
+const DEGREE_STEPS = [
+  "var(--viz-degree-1)",
+  "var(--viz-degree-2)",
+  "var(--viz-degree-3)",
+  "var(--viz-degree-4)",
+] as const;
+
+export function degreeColor(degree: string) {
+  const index = DEGREE_ORDER.indexOf(degree as (typeof DEGREE_ORDER)[number]);
+  return index === -1 ? VIZ.inkMuted : DEGREE_STEPS[index];
+}
+
+// Sorts a list of degree levels into the order of study. Anything the
+// list does not name falls to the end, alphabetically.
+export function degreeRank(degree: string) {
+  const index = DEGREE_ORDER.indexOf(degree as (typeof DEGREE_ORDER)[number]);
+  return index === -1 ? DEGREE_ORDER.length : index;
+}
