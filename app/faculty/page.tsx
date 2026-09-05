@@ -23,11 +23,6 @@ export default async function FacultyPage() {
   const text = await fs.readFile(filePath, "utf-8");
   const list = JSON.parse(text) as FacultyList;
 
-  const withResults = list.faculty.length;
-  const belowThreshold = list.faculty.filter(
-    (person) => person.status === "Improvement Required"
-  ).length;
-
   return (
     // The same tinted plane as the overview, so the two dashboards
     // read as one product. It prints white.
@@ -45,18 +40,6 @@ export default async function FacultyPage() {
             against the UK Professional Standards Framework. Every report can
             be downloaded as a PDF.
           </p>
-          <dl className="mt-6 flex flex-wrap gap-x-8 gap-y-3 border-t pt-4 text-sm">
-            <div className="flex items-baseline gap-2">
-              <dt className="text-muted-foreground">Faculty with results</dt>
-              <dd className="font-medium tabular-nums">{withResults}</dd>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <dt className="text-muted-foreground">
-                Below the threshold
-              </dt>
-              <dd className="font-medium tabular-nums">{belowThreshold}</dd>
-            </div>
-          </dl>
         </header>
 
         <FacultyReport faculty={list.faculty} />

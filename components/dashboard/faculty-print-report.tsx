@@ -163,7 +163,8 @@ export function FacultyPrintReport({ detail }: { detail: FacultyDetail }) {
 
           <dt className="text-black/60">Classes taught</dt>
           <dd className="tabular-nums">
-            {detail.classCount} across {detail.courseCount} courses
+            {detail.classCount} surveys across {response.sectionsTaught} class
+            sections in {detail.courseCount} courses
           </dd>
 
           <dt className="text-black/60">Report generated</dt>
@@ -190,7 +191,9 @@ export function FacultyPrintReport({ detail }: { detail: FacultyDetail }) {
               <dd className="mt-1 text-2xl font-semibold tabular-nums">
                 {response.responses.toLocaleString()}
               </dd>
-              <dd className="text-[10px] text-black/60">surveys returned</dd>
+              <dd className="text-[10px] text-black/60">
+                student responses
+              </dd>
             </div>
             <div>
               <dt className="text-black/60">Response ratio</dt>
@@ -303,7 +306,7 @@ export function FacultyPrintReport({ detail }: { detail: FacultyDetail }) {
                 </td>
               </tr>
               <tr>
-                <td className={PD}>Surveys returned</td>
+                <td className={PD}>Student responses</td>
                 <td className={PD_R}>{response.responses.toLocaleString()}</td>
               </tr>
               <tr>
@@ -319,6 +322,10 @@ export function FacultyPrintReport({ detail }: { detail: FacultyDetail }) {
                 <td className={PD_R}>
                   {response.sectionsTaught.toLocaleString()}
                 </td>
+              </tr>
+              <tr>
+                <td className={PD}>Surveys returned</td>
+                <td className={PD_R}>{detail.classCount.toLocaleString()}</td>
               </tr>
               <tr>
                 <td className={PD}>Sections with an enrolment figure</td>
