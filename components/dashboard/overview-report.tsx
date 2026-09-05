@@ -3,9 +3,13 @@
 // components/dashboard/overview-report.tsx
 //
 // The institutional overview. "use client" because the question
-// tracking section responds to two dropdowns.
+// tracking, department and programme sections respond to dropdowns.
+//
+// Colours come from the tokens in app/globals.css by way of
+// lib/chart-theme.ts. Nothing here carries a raw hex value, so the
+// whole dashboard moves together when a token changes.
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import {
   Bar,
@@ -22,13 +26,7 @@ import {
   YAxis,
 } from "recharts";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -36,6 +34,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
+import {
+  AXIS_TICK,
+  BAR_SIZE,
+  DOT_RADIUS,
+  GRID,
+  LINE_WIDTH,
+  VIZ,
+  scoreColor,
+  scoreTrack,
+} from "@/lib/chart-theme";
 
 import type {
   DepartmentResult,
@@ -80,46 +89,478 @@ const CATEGORY_MEANING: Record<string, string> = {
   PV: "How the faculty member treats students",
 };
 
+// ---------- Shared pieces ----------
+
 function showScore(score: number | null) {
   if (score === null) return "\u2014";
   return `${score}%`;
 }
 
-function StatusLabel({ status }: { status: string }) {
+// A signed difference. The sign carries the meaning, so the colour is
+// reinforcement rather than the only channel.
+function Delta({ value }: { value: number | null }) {
+  if (value === null) {
+    return <span className="text-muted-foreground">{"\u2014"}</span>;
+  }
+  const positive = value >= 0;
+  return (
+    <span
+      className="tabular-nums"
+      style={{
+        color: positive
+          ? "var(--status-good-inline)"
+          : "var(--status-critical-inline)",
+      }}
+    >
+      {positive ? "+" : "\u2212"}
+      {Math.abs(value)}
+    </span>
+  );
+}
+
+// A status always ships with its written label; the dot is only a cue.
+function StatusPill({ status }: { status: string }) {
   const needsWork = status === "Improvement Required";
   return (
     <span
-      className={
-        "inline-block whitespace-nowrap rounded px-2 py-0.5 text-xs font-medium " +
-        (needsWork
-          ? "bg-red-100 text-red-900"
-          : "bg-emerald-100 text-emerald-900")
-      }
+      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium"
+      style={{
+        backgroundColor: needsWork
+          ? "var(--status-critical-wash)"
+          : "var(--status-good-wash)",
+        color: needsWork
+          ? "var(--status-critical-inline)"
+          : "var(--status-good-inline)",
+      }}
     >
+      <span
+        aria-hidden
+        className="size-1.5 shrink-0 rounded-full"
+        style={{
+          backgroundColor: needsWork
+            ? "var(--status-critical)"
+            : "var(--status-good)",
+        }}
+      />
       {needsWork ? "Improvement required" : "Acceptable"}
     </span>
   );
 }
 
-function ScoreBar({ score, target }: { score: number | null; target: number }) {
+// A score against the threshold. The track is a lighter step of the
+// fill's own colour, so the state reads across the whole bar.
+function Meter({
+  score,
+  target,
+  className = "h-2",
+}: {
+  score: number | null;
+  target: number;
+  className?: string;
+}) {
   if (score === null) return null;
-  const below = score < target;
   return (
-    <div className="relative h-2.5 w-full rounded-full bg-muted">
+    <div
+      className={"relative w-full overflow-hidden rounded-full " + className}
+      style={{ backgroundColor: scoreTrack(score, target) }}
+      role="img"
+      aria-label={`${score}% against a ${target}% threshold`}
+    >
       <div
-        className={
-          "h-full rounded-full transition-all " +
-          (below ? "bg-red-600" : "bg-emerald-600")
-        }
-        style={{ width: `${Math.min(score, 100)}%` }}
+        className="h-full rounded-full"
+        style={{
+          width: `${Math.min(score, 100)}%`,
+          backgroundColor: scoreColor(score, target),
+        }}
       />
       <div
-        className="absolute top-0 h-full w-0.5 bg-foreground/60"
+        aria-hidden
+        className="absolute inset-y-0 w-px bg-foreground/45"
         style={{ left: `${target}%` }}
       />
     </div>
   );
 }
+
+function SectionHeader({ title, lede }: { title: string; lede: ReactNode }) {
+  return (
+    <div className="mb-6 border-b pb-4">
+      <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
+      <p className="mt-1.5 max-w-3xl text-sm text-muted-foreground">{lede}</p>
+    </div>
+  );
+}
+
+function SubHeading({ children }: { children: ReactNode }) {
+  return (
+    <h3 className="mb-3 text-sm font-semibold tracking-tight">{children}</h3>
+  );
+}
+
+// A card built to hold a chart: a title, the plot, then an optional
+// key and caption underneath.
+function Panel({
+  title,
+  children,
+  keyItems,
+  caption,
+  className = "",
+}: {
+  title?: ReactNode;
+  children: ReactNode;
+  keyItems?: KeyItem[];
+  caption?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <Card className={"gap-0 p-5 " + className}>
+      {title ? (
+        <p className="mb-4 text-sm font-medium leading-snug">{title}</p>
+      ) : null}
+      {children}
+      {keyItems ? <ChartKey items={keyItems} /> : null}
+      {caption ? (
+        <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+          {caption}
+        </p>
+      ) : null}
+    </Card>
+  );
+}
+
+type KeyItem = { label: string; color: string; dashed?: boolean };
+
+// The identity channel. Every chart that encodes something in colour
+// says so here in words, so colour never carries meaning alone.
+function ChartKey({ items }: { items: KeyItem[] }) {
+  return (
+    <ul className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t pt-3">
+      {items.map((item) => (
+        <li
+          key={item.label}
+          className="flex items-center gap-2 text-xs text-muted-foreground"
+        >
+          {item.dashed ? (
+            <span
+              aria-hidden
+              className="h-0 w-4 shrink-0 border-t-2 border-dashed"
+              style={{ borderColor: item.color }}
+            />
+          ) : (
+            <span
+              aria-hidden
+              className="size-2.5 shrink-0 rounded-sm"
+              style={{ backgroundColor: item.color }}
+            />
+          )}
+          {item.label}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// The threshold key, used by every chart that draws the line
+function thresholdKey(target: number): KeyItem {
+  return { label: `${target}% threshold`, color: VIZ.threshold, dashed: true };
+}
+
+// The pass/fail key, used by every chart whose marks are coloured by
+// where they sit against the threshold
+function statusKeys(target: number): KeyItem[] {
+  return [
+    { label: `Meets the ${target}% threshold`, color: VIZ.meets },
+    { label: "Improvement required", color: VIZ.below },
+  ];
+}
+
+// One tooltip for the whole dashboard, styled like the cards.
+type TooltipRow = { full?: string; answers?: number };
+
+function ChartTooltip({
+  active,
+  payload,
+  label,
+  valueLabel = "Average",
+}: {
+  active?: boolean;
+  payload?: { value?: number | string; payload?: TooltipRow }[];
+  label?: string | number;
+  valueLabel?: string;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  const row = payload[0]?.payload ?? {};
+  const value = payload[0]?.value;
+  return (
+    <div className="rounded-lg bg-card px-3 py-2 shadow-lg ring-1 ring-foreground/10">
+      <p className="text-xs font-medium">{row.full ?? label}</p>
+      <p className="mt-1 flex items-baseline gap-2">
+        <span className="text-xs text-muted-foreground">{valueLabel}</span>
+        <span className="text-sm font-semibold tabular-nums">{value}%</span>
+      </p>
+      {row.answers !== undefined ? (
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {row.answers.toLocaleString()} answers
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+// Only the final point on a line is labelled; the axis and the tooltip
+// carry the rest. A number beside every dot goes unread.
+//
+// This has to be a valueAccessor rather than a formatter: Recharts
+// calls a label formatter with the value alone, so there is no index
+// to test. valueAccessor receives one, but only when the LabelList
+// carries no dataKey of its own.
+function endpointOnly(length: number) {
+  return (entry: { payload?: { score?: number } }, index: number) =>
+    index === length - 1 ? `${entry.payload?.score}%` : "";
+}
+
+// Table styling, kept in one place so every table matches.
+// The alignment utilities are held apart rather than concatenated onto
+// one base string, since two conflicting Tailwind classes on the same
+// element resolve by stylesheet order, not by the order written.
+const TH = "px-4 py-2.5 text-xs font-medium uppercase tracking-wide";
+const TH_L = TH + " text-left";
+const TH_R = TH + " text-right";
+const TD = "px-4 py-2.5 align-middle";
+const TD_R = TD + " text-right tabular-nums";
+const TR = "border-b transition-colors last:border-0 hover:bg-muted/40";
+
+function TableShell({ children }: { children: ReactNode }) {
+  return (
+    <div className="overflow-x-auto rounded-xl bg-card ring-1 ring-foreground/10">
+      <table className="w-full border-collapse text-sm">{children}</table>
+    </div>
+  );
+}
+
+function Thead({ children }: { children: ReactNode }) {
+  return (
+    <thead className="border-b bg-muted/40 text-muted-foreground">
+      {children}
+    </thead>
+  );
+}
+
+// A supporting figure beside the headline. Big numbers take the font's
+// proportional figures; tabular digits are for columns that align.
+function StatTile({
+  label,
+  value,
+  note,
+  flagged = false,
+}: {
+  label: string;
+  value: number;
+  note: string;
+  flagged?: boolean;
+}) {
+  return (
+    <Card className="gap-2 p-5">
+      <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {flagged ? (
+          <span
+            aria-hidden
+            className="size-1.5 shrink-0 rounded-full"
+            style={{ backgroundColor: "var(--status-critical)" }}
+          />
+        ) : null}
+        {label}
+      </p>
+      <p className="text-4xl font-semibold leading-none tracking-tight">
+        {value.toLocaleString()}
+      </p>
+      <p className="text-sm text-muted-foreground">{note}</p>
+    </Card>
+  );
+}
+
+// The strongest / weakest question lists
+function QuestionList({
+  items,
+  target,
+}: {
+  items: [string, { score: number | null }][];
+  target: number;
+}) {
+  return (
+    <ol className="space-y-4">
+      {items.map(([number, result]) => (
+        <li key={number}>
+          <div className="flex items-baseline justify-between gap-4">
+            <span className="text-sm leading-snug">
+              <span className="font-medium tabular-nums text-muted-foreground">
+                Q{number}
+              </span>{" "}
+              {QUESTION_TEXT[number]}
+            </span>
+            <span className="shrink-0 text-sm font-semibold tabular-nums">
+              {showScore(result.score)}
+            </span>
+          </div>
+          <div className="mt-2">
+            <Meter score={result.score} target={target} className="h-1.5" />
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+// Score over time. The same plot serves the institution, a department
+// and a tracked question, so they stay identical to read.
+type TrendPoint = { label: string; score: number; answers: number };
+
+function TrendChart({
+  data,
+  target,
+  valueLabel = "Average",
+}: {
+  data: TrendPoint[];
+  target: number;
+  valueLabel?: string;
+}) {
+  return (
+    <div className="h-64 w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 24, right: 44, left: 0, bottom: 4 }}>
+          <CartesianGrid {...GRID} vertical={false} />
+          <XAxis
+            dataKey="label"
+            tickLine={false}
+            axisLine={{ stroke: VIZ.grid }}
+            tick={AXIS_TICK}
+            tickMargin={8}
+          />
+          <YAxis
+            domain={[0, 100]}
+            tickLine={false}
+            axisLine={false}
+            tick={AXIS_TICK}
+            unit="%"
+            width={44}
+          />
+          <Tooltip
+            content={<ChartTooltip valueLabel={valueLabel} />}
+            cursor={{ stroke: VIZ.grid, strokeWidth: 1 }}
+          />
+          <ReferenceLine y={target} stroke={VIZ.threshold} strokeDasharray="4 4" />
+          <Line
+            type="monotone"
+            dataKey="score"
+            stroke={VIZ.meets}
+            strokeWidth={LINE_WIDTH}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            dot={{
+              r: DOT_RADIUS,
+              fill: VIZ.meets,
+              stroke: VIZ.surface,
+              strokeWidth: 2,
+            }}
+            activeDot={{
+              r: DOT_RADIUS + 2,
+              fill: VIZ.meets,
+              stroke: VIZ.surface,
+              strokeWidth: 2,
+            }}
+            animationDuration={700}
+          >
+            <LabelList
+              position="top"
+              offset={12}
+              fill={VIZ.ink}
+              fontSize={12}
+              fontWeight={600}
+              valueAccessor={endpointOnly(data.length)}
+            />
+          </Line>
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// A ranked horizontal comparison. The value rides each bar, so the
+// x-axis is dropped: direct labels come before gridlines.
+type RankedRow = { label: string; full: string; score: number };
+
+function RankedBars({
+  data,
+  target,
+  height,
+  barSize = BAR_SIZE,
+  labelWidth,
+  fontSize = 12,
+  benchmark = null,
+}: {
+  data: RankedRow[];
+  target: number;
+  height: string;
+  barSize?: number;
+  labelWidth: number;
+  fontSize?: number;
+  benchmark?: number | null;
+}) {
+  return (
+    <div className={"w-full " + height}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart
+          data={data}
+          layout="vertical"
+          margin={{ top: 4, right: 56, left: 0, bottom: 4 }}
+        >
+          <XAxis type="number" domain={[0, 100]} hide />
+          <YAxis
+            type="category"
+            dataKey="label"
+            width={labelWidth}
+            tickLine={false}
+            axisLine={false}
+            tick={{ ...AXIS_TICK, fontSize }}
+          />
+          <Tooltip
+            content={<ChartTooltip valueLabel="Average" />}
+            cursor={{ fill: "var(--chart-grid)", fillOpacity: 0.5 }}
+          />
+          <ReferenceLine x={target} stroke={VIZ.threshold} strokeDasharray="4 4" />
+          {benchmark !== null && (
+            <ReferenceLine
+              x={benchmark}
+              stroke={VIZ.benchmark}
+              strokeDasharray="2 3"
+            />
+          )}
+          <Bar
+            dataKey="score"
+            radius={[0, 4, 4, 0]}
+            maxBarSize={barSize}
+            animationDuration={700}
+          >
+            {data.map((entry) => (
+              <Cell key={entry.full} fill={scoreColor(entry.score, target)} />
+            ))}
+            <LabelList
+              dataKey="score"
+              position="right"
+              offset={10}
+              fill={VIZ.ink}
+              fontSize={fontSize}
+              fontWeight={600}
+              formatter={(value: unknown) => `${Number(value)}%`}
+            />
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// ---------- The report ----------
 
 export function OverviewReport({
   data,
@@ -144,221 +585,190 @@ export function OverviewReport({
   const strongest = questions.slice(0, 5);
   const weakest = [...questions].reverse().slice(0, 5);
 
+  // How far apart the best and worst questions actually are
+  const questionSpread =
+    Math.round(
+      ((questions[0]?.[1].score ?? 0) -
+        (questions[questions.length - 1]?.[1].score ?? 0)) *
+        10
+    ) / 10;
+
   const semesterChart = semesters
     .filter((s) => s.score !== null)
-    .map((s) => ({ label: s.semesterName, score: s.score as number }));
+    .map((s) => ({
+      label: s.semesterName,
+      score: s.score as number,
+      answers: s.questionCount,
+    }));
 
   const yearChart = years
     .filter(([, y]) => y.score !== null)
-    .map(([label, y]) => ({ label, score: y.score as number }));
+    .map(([label, y]) => ({
+      label,
+      score: y.score as number,
+      answers: y.questionCount,
+    }));
 
   const categoryChart = ["AA", "CK", "PV"]
     .map((code) => {
       const result = data.byUkpsfCategory[code];
       if (!result || result.score === null) return null;
-      return { label: CATEGORY_NAMES[code], score: result.score };
+      return {
+        label: CATEGORY_NAMES[code],
+        full: CATEGORY_NAMES[code],
+        score: result.score,
+      };
     })
-    .filter((item): item is { label: string; score: number } => item !== null);
+    .filter((item): item is RankedRow => item !== null);
 
   const improvement = data.improvement;
 
   return (
-    <div className="space-y-12">
+    <div className="space-y-14">
       {/* ---------- Headline ---------- */}
       <section>
         <div className="grid gap-4 lg:grid-cols-3">
-          <Card className="lg:row-span-2">
-            <CardHeader className="pb-3">
-              <CardDescription className="text-xs uppercase tracking-wide">
+          {/* The one number the page leads with */}
+          <Card className="justify-between gap-6 p-6 lg:row-span-2">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Institutional average
-              </CardDescription>
-              <CardTitle className="text-5xl tabular-nums">
+              </p>
+              <p className="mt-3 text-6xl font-semibold leading-none tracking-tight">
                 {showScore(data.institution.score)}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <StatusLabel status={data.institution.status} />
-              <div className="space-y-1.5">
-                <ScoreBar score={data.institution.score} target={target} />
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>0%</span>
-                  <span>threshold {target}%</span>
-                  <span>100%</span>
-                </div>
+              </p>
+              <div className="mt-4">
+                <StatusPill status={data.institution.status} />
               </div>
-              <p className="text-sm text-muted-foreground">
+            </div>
+
+            <div className="space-y-2">
+              <Meter
+                score={data.institution.score}
+                target={target}
+                className="h-2.5"
+              />
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>0%</span>
+                <span>threshold {target}%</span>
+                <span>100%</span>
+              </div>
+              <p className="pt-2 text-sm text-muted-foreground">
                 {data.institution.gap !== null && data.institution.gap >= 0
                   ? `${data.institution.gap} points above the ${target}% threshold`
                   : `${Math.abs(
                       data.institution.gap ?? 0
                     )} points below the ${target}% threshold`}
               </p>
-            </CardContent>
+            </div>
           </Card>
 
-          <Card className="transition-shadow hover:shadow-md">
-            <CardHeader className="pb-2">
-              <CardDescription className="text-xs uppercase tracking-wide">
-                Faculty below {target}%
-              </CardDescription>
-              <CardTitle className="text-3xl tabular-nums text-red-700">
-                {improvement.faculty.length}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                {data.improvementSummary
-                  ? `of ${data.improvementSummary.facultyTotal} (${data.improvementSummary.facultyBelowPercent}%)`
-                  : "faculty members"}
-              </p>
-            </CardContent>
-          </Card>
+          <StatTile
+            label={`Faculty below ${target}%`}
+            value={improvement.faculty.length}
+            flagged
+            note={
+              data.improvementSummary
+                ? `of ${data.improvementSummary.facultyTotal} (${data.improvementSummary.facultyBelowPercent}%)`
+                : "faculty members"
+            }
+          />
 
-          <Card className="transition-shadow hover:shadow-md">
-            <CardHeader className="pb-2">
-              <CardDescription className="text-xs uppercase tracking-wide">
-                Courses below {target}%
-              </CardDescription>
-              <CardTitle className="text-3xl tabular-nums text-red-700">
-                {improvement.courses.length}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                {data.improvementSummary
-                  ? `of ${data.improvementSummary.courseTotal} (${data.improvementSummary.courseBelowPercent}%)`
-                  : "courses"}
-              </p>
-            </CardContent>
-          </Card>
+          <StatTile
+            label={`Courses below ${target}%`}
+            value={improvement.courses.length}
+            flagged
+            note={
+              data.improvementSummary
+                ? `of ${data.improvementSummary.courseTotal} (${data.improvementSummary.courseBelowPercent}%)`
+                : "courses"
+            }
+          />
 
-          <Card className="transition-shadow hover:shadow-md">
-            <CardHeader className="pb-2">
-              <CardDescription className="text-xs uppercase tracking-wide">
-                Classes below {target}%
-              </CardDescription>
-              <CardTitle className="text-3xl tabular-nums text-red-700">
-                {improvement.classes.length}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                individual class sections
-              </p>
-            </CardContent>
-          </Card>
+          <StatTile
+            label={`Classes below ${target}%`}
+            value={improvement.classes.length}
+            flagged
+            note="individual class sections"
+          />
 
-          <Card className="transition-shadow hover:shadow-md">
-            <CardHeader className="pb-2">
-              <CardDescription className="text-xs uppercase tracking-wide">
-                Student answers
-              </CardDescription>
-              <CardTitle className="text-3xl tabular-nums">
-                {data.institution.questionCount.toLocaleString()}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                across {data.institution.groupCount} classes
-              </p>
-            </CardContent>
-          </Card>
+          <StatTile
+            label="Student answers"
+            value={data.institution.questionCount}
+            note={`across ${data.institution.groupCount} classes`}
+          />
         </div>
       </section>
 
       {/* ---------- Requirement 7: semesters and academic years ---------- */}
       <section>
-        <h2 className="mb-1 text-lg font-medium">Performance over time</h2>
-        <p className="mb-4 text-sm text-muted-foreground">
-          The institutional average by semester and by academic year. The
-          dashed line marks the {target}% threshold.
-        </p>
+        <SectionHeader
+          title="Performance over time"
+          lede="The institutional average by semester and by academic year."
+        />
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card className="p-4">
-            <p className="mb-2 text-sm font-medium">By semester</p>
-            <div className="h-56 w-full">
+        <div className="grid gap-4 lg:grid-cols-[3fr_2fr]">
+          <Panel
+            title="By semester"
+            keyItems={[thresholdKey(target)]}
+            caption="Spring 2022 is not shown. It was supplied as department summaries only, with no question-level data."
+          >
+            <TrendChart data={semesterChart} target={target} />
+          </Panel>
+
+          <Panel title="By academic year" keyItems={[thresholdKey(target)]}>
+            <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={semesterChart} margin={{ top: 8, right: 44 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="label" tickLine={false} fontSize={12} />
+                <BarChart
+                  data={yearChart}
+                  margin={{ top: 24, right: 8, left: 0, bottom: 4 }}
+                >
+                  <CartesianGrid {...GRID} vertical={false} />
+                  <XAxis
+                    dataKey="label"
+                    tickLine={false}
+                    axisLine={{ stroke: VIZ.grid }}
+                    tick={AXIS_TICK}
+                    tickMargin={8}
+                  />
                   <YAxis
                     domain={[0, 100]}
                     tickLine={false}
                     axisLine={false}
-                    fontSize={12}
+                    tick={AXIS_TICK}
                     unit="%"
+                    width={44}
                   />
                   <Tooltip
-                    formatter={(value: unknown) => [
-                      `${Number(value)}%`,
-                      "Average",
-                    ]}
+                    content={<ChartTooltip valueLabel="Average" />}
+                    cursor={{ fill: "var(--chart-grid)", fillOpacity: 0.5 }}
                   />
                   <ReferenceLine
                     y={target}
-                    stroke="#B42318"
-                    strokeDasharray="4 4"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="score"
-                    stroke="#E0241B"
-                    strokeWidth={2}
-                    dot={{ r: 4, fill: "#E0241B" }}
-                    activeDot={{ r: 6 }}
-                    animationDuration={800}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </Card>
-
-          <Card className="p-4">
-            <p className="mb-2 text-sm font-medium">By academic year</p>
-            <div className="h-56 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={yearChart} margin={{ top: 20, right: 8 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="label" tickLine={false} fontSize={12} />
-                  <YAxis
-                    domain={[0, 100]}
-                    tickLine={false}
-                    axisLine={false}
-                    fontSize={12}
-                    unit="%"
-                  />
-                  <Tooltip
-                    formatter={(value: unknown) => [
-                      `${Number(value)}%`,
-                      "Average",
-                    ]}
-                    cursor={{ fill: "rgba(0,0,0,0.04)" }}
-                  />
-                  <ReferenceLine
-                    y={target}
-                    stroke="#B42318"
+                    stroke={VIZ.threshold}
                     strokeDasharray="4 4"
                   />
                   <Bar
                     dataKey="score"
                     radius={[4, 4, 0, 0]}
-                    barSize={64}
-                    fill="#047857"
-                    animationDuration={800}
+                    maxBarSize={BAR_SIZE}
+                    fill={VIZ.meets}
+                    animationDuration={700}
                   >
                     <LabelList
                       dataKey="score"
                       position="top"
-                      formatter={(value: unknown) => `${Number(value)}%`}
+                      offset={8}
+                      fill={VIZ.ink}
                       fontSize={12}
                       fontWeight={600}
+                      formatter={(value: unknown) => `${Number(value)}%`}
                     />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </Card>
+          </Panel>
         </div>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-3">
@@ -369,42 +779,33 @@ export function OverviewReport({
                 ? Math.round((semester.score - previous) * 10) / 10
                 : null;
             return (
-              <Card
-                key={semester.semesterName}
-                className="transition-shadow hover:shadow-md"
-              >
-                <CardHeader className="pb-2">
-                  <CardDescription className="text-xs">
+              <Card key={semester.semesterName} className="gap-3 p-5">
+                <div>
+                  <p className="text-xs text-muted-foreground">
                     {semester.semesterName} &middot; {semester.academicYear}
-                  </CardDescription>
-                  <CardTitle className="text-2xl tabular-nums">
-                    {showScore(semester.score)}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    {semester.groupCount} classes
-                    {change !== null && (
-                      <>
-                        {" "}
-                        &middot;{" "}
-                        {change >= 0
-                          ? `up ${change}`
-                          : `down ${Math.abs(change)}`}{" "}
-                        points
-                      </>
-                    )}
                   </p>
-                </CardContent>
+                  <p className="mt-1.5 text-3xl font-semibold leading-none tracking-tight">
+                    {showScore(semester.score)}
+                  </p>
+                </div>
+                <Meter score={semester.score} target={target} className="h-1.5" />
+                <p className="text-xs text-muted-foreground">
+                  {semester.groupCount} classes
+                  {change !== null && (
+                    <>
+                      {" "}
+                      &middot;{" "}
+                      {change >= 0
+                        ? `up ${change}`
+                        : `down ${Math.abs(change)}`}{" "}
+                      points
+                    </>
+                  )}
+                </p>
               </Card>
             );
           })}
         </div>
-
-        <p className="mt-3 text-xs text-muted-foreground">
-          Spring 2022 is not shown. It was supplied as department summaries
-          only, with no question-level data.
-        </p>
       </section>
 
       {/* ---------- Requirements 2, 3 and 6: departments ---------- */}
@@ -415,96 +816,43 @@ export function OverviewReport({
       />
 
       {/* ---------- Requirement 2: programmes ---------- */}
-      <ProgrammeSection
-        programmes={data.byProgramme}
-        target={target}
-      />
+      <ProgrammeSection programmes={data.byProgramme} target={target} />
 
       {/* ---------- UKPSF ---------- */}
       <section>
-        <h2 className="mb-1 text-lg font-medium">Teaching quality areas</h2>
-        <p className="mb-4 text-sm text-muted-foreground">
-          The three areas of the UK Professional Standards Framework.
-        </p>
+        <SectionHeader
+          title="Teaching quality areas"
+          lede="The three areas of the UK Professional Standards Framework."
+        />
 
-        <Card className="p-4 pt-6">
-          <div className="h-56 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={categoryChart}
-                layout="vertical"
-                margin={{ top: 4, right: 56, left: 8, bottom: 4 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                <XAxis
-                  type="number"
-                  domain={[0, 100]}
-                  tickLine={false}
-                  axisLine={false}
-                  fontSize={12}
-                  unit="%"
-                />
-                <YAxis
-                  type="category"
-                  dataKey="label"
-                  width={150}
-                  tickLine={false}
-                  axisLine={false}
-                  fontSize={13}
-                />
-                <Tooltip
-                  formatter={(value: unknown) => [`${Number(value)}%`, "Score"]}
-                  cursor={{ fill: "rgba(0,0,0,0.04)" }}
-                />
-                <ReferenceLine
-                  x={target}
-                  stroke="#B42318"
-                  strokeDasharray="4 4"
-                />
-                <Bar
-                  dataKey="score"
-                  radius={[0, 4, 4, 0]}
-                  barSize={28}
-                  animationDuration={800}
-                >
-                  {categoryChart.map((entry) => (
-                    <Cell
-                      key={entry.label}
-                      fill={entry.score < target ? "#B42318" : "#047857"}
-                    />
-                  ))}
-                  <LabelList
-                    dataKey="score"
-                    position="right"
-                    formatter={(value: unknown) => `${Number(value)}%`}
-                    fontSize={13}
-                    fontWeight={600}
-                  />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
+        <Panel keyItems={[thresholdKey(target), ...statusKeys(target)]}>
+          <RankedBars
+            data={categoryChart}
+            target={target}
+            height="h-44"
+            labelWidth={150}
+            fontSize={13}
+          />
+        </Panel>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-3">
           {["AA", "CK", "PV"].map((code) => {
             const result = data.byUkpsfCategory[code];
             if (!result) return null;
             return (
-              <Card key={code} className="transition-shadow hover:shadow-md">
-                <CardHeader className="pb-2">
-                  <CardDescription className="text-xs">
+              <Card key={code} className="gap-3 p-5">
+                <div>
+                  <p className="text-xs text-muted-foreground">
                     {CATEGORY_NAMES[code]}
-                  </CardDescription>
-                  <CardTitle className="text-2xl tabular-nums">
-                    {showScore(result.score)}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    {CATEGORY_MEANING[code]}
                   </p>
-                </CardContent>
+                  <p className="mt-1.5 text-3xl font-semibold leading-none tracking-tight">
+                    {showScore(result.score)}
+                  </p>
+                </div>
+                <Meter score={result.score} target={target} className="h-1.5" />
+                <p className="text-sm text-muted-foreground">
+                  {CATEGORY_MEANING[code]}
+                </p>
               </Card>
             );
           })}
@@ -513,206 +861,132 @@ export function OverviewReport({
 
       {/* ---------- Requirement 8: best and worst questions ---------- */}
       <section>
-        <h2 className="mb-1 text-lg font-medium">
-          Strongest and weakest questions
-        </h2>
-        <p className="mb-4 text-sm text-muted-foreground">
-          Where the college does best and least well across all evaluations.
-        </p>
+        <SectionHeader
+          title="Strongest and weakest questions"
+          lede={`Where the college does best and least well across all evaluations. All twenty questions fall within ${questionSpread} points of each other, so these bars sit close together by design.`}
+        />
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card className="p-4">
-            <p className="mb-3 text-sm font-medium">Five strongest</p>
-            <ul className="space-y-3">
-              {strongest.map(([number, result]) => (
-                <li key={number}>
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="text-sm">
-                      Q{number}. {QUESTION_TEXT[number]}
-                    </span>
-                    <span className="shrink-0 tabular-nums text-sm font-medium">
-                      {showScore(result.score)}
-                    </span>
-                  </div>
-                  <div className="mt-1.5">
-                    <ScoreBar score={result.score} target={target} />
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </Card>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Panel title="Five strongest" keyItems={[thresholdKey(target)]}>
+            <QuestionList items={strongest} target={target} />
+          </Panel>
 
-          <Card className="p-4">
-            <p className="mb-3 text-sm font-medium">Five weakest</p>
-            <ul className="space-y-3">
-              {weakest.map(([number, result]) => (
-                <li key={number}>
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="text-sm">
-                      Q{number}. {QUESTION_TEXT[number]}
-                    </span>
-                    <span className="shrink-0 tabular-nums text-sm font-medium">
-                      {showScore(result.score)}
-                    </span>
-                  </div>
-                  <div className="mt-1.5">
-                    <ScoreBar score={result.score} target={target} />
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </Card>
+          <Panel title="Five weakest" keyItems={[thresholdKey(target)]}>
+            <QuestionList items={weakest} target={target} />
+          </Panel>
         </div>
       </section>
 
       {/* ---------- Requirement 4: improvement required ---------- */}
       <section>
-        <h2 className="mb-1 text-lg font-medium">Improvement required</h2>
-        <p className="mb-4 text-sm text-muted-foreground">
-          Everything scoring below the {target}% threshold, gathered in one
-          place.
-        </p>
+        <SectionHeader
+          title="Improvement required"
+          lede={`Everything scoring below the ${target}% threshold, gathered in one place.`}
+        />
 
         <div className="space-y-8">
           <div>
-            <h3 className="mb-2 text-sm font-medium">
-              Survey questions below {target}%
-            </h3>
+            <SubHeading>Survey questions below {target}%</SubHeading>
             {improvement.questions.length === 0 ? (
-              <Card>
-                <CardHeader>
-                  <CardDescription>
-                    No survey question falls below {target}% across the college.
-                    The weakest, Q{weakest[0]?.[0]}, scores{" "}
-                    {showScore(weakest[0]?.[1].score ?? null)}. Individual
-                    faculty members may still have weak questions, shown on
-                    their own report.
-                  </CardDescription>
-                </CardHeader>
+              <Card className="p-5">
+                <p className="max-w-3xl text-sm text-muted-foreground">
+                  No survey question falls below {target}% across the college.
+                  The weakest, Q{weakest[0]?.[0]}, scores{" "}
+                  {showScore(weakest[0]?.[1].score ?? null)}. Individual faculty
+                  members may still have weak questions, shown on their own
+                  report.
+                </p>
               </Card>
             ) : (
-              <div className="overflow-x-auto rounded-md border">
-                <table className="w-full text-sm">
-                  <thead className="border-b bg-muted/50">
-                    <tr>
-                      <th className="px-3 py-2 text-left font-medium">Q</th>
-                      <th className="px-3 py-2 text-left font-medium">
-                        Question
-                      </th>
-                      <th className="px-3 py-2 text-right font-medium">
-                        Score
-                      </th>
+              <TableShell>
+                <Thead>
+                  <tr>
+                    <th className={TH_L}>Q</th>
+                    <th className={TH_L}>Question</th>
+                    <th className={TH_R}>Score</th>
+                  </tr>
+                </Thead>
+                <tbody>
+                  {improvement.questions.map((item) => (
+                    <tr key={item.number} className={TR}>
+                      <td className={TD + " tabular-nums text-muted-foreground"}>
+                        {item.number}
+                      </td>
+                      <td className={TD}>{QUESTION_TEXT[item.number]}</td>
+                      <td className={TD_R + " font-medium"}>
+                        {showScore(item.score)}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {improvement.questions.map((item) => (
-                      <tr
-                        key={item.number}
-                        className="border-b transition-colors last:border-0 hover:bg-muted/40"
-                      >
-                        <td className="px-3 py-2 tabular-nums">
-                          {item.number}
-                        </td>
-                        <td className="px-3 py-2">
-                          {QUESTION_TEXT[item.number]}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums">
-                          {showScore(item.score)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </TableShell>
             )}
           </div>
 
           <div>
-            <h3 className="mb-2 text-sm font-medium">
+            <SubHeading>
               Courses below {target}% ({improvement.courses.length})
-            </h3>
-            <div className="overflow-x-auto rounded-md border">
-              <table className="w-full text-sm">
-                <thead className="border-b bg-muted/50">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-medium">Course</th>
-                    <th className="px-3 py-2 text-left font-medium">Code</th>
-                    <th className="px-3 py-2 text-right font-medium">
-                      Classes
-                    </th>
-                    <th className="px-3 py-2 text-right font-medium">Score</th>
-                    <th className="px-3 py-2 text-right font-medium">
-                      Difference
-                    </th>
+            </SubHeading>
+            <TableShell>
+              <Thead>
+                <tr>
+                  <th className={TH_L}>Course</th>
+                  <th className={TH_L}>Code</th>
+                  <th className={TH_R}>Classes</th>
+                  <th className={TH_R}>Score</th>
+                  <th className={TH_R}>Difference</th>
+                </tr>
+              </Thead>
+              <tbody>
+                {improvement.courses.map((item) => (
+                  <tr key={item.code} className={TR}>
+                    <td className={TD + " font-medium"}>{item.name}</td>
+                    <td className={TD + " text-muted-foreground"}>{item.code}</td>
+                    <td className={TD_R + " text-muted-foreground"}>
+                      {item.groupCount}
+                    </td>
+                    <td className={TD_R + " font-medium"}>
+                      {showScore(item.score)}
+                    </td>
+                    <td className={TD_R}>
+                      <Delta value={item.gap} />
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {improvement.courses.map((item) => (
-                    <tr
-                      key={item.code}
-                      className="border-b transition-colors last:border-0 hover:bg-muted/40"
-                    >
-                      <td className="px-3 py-2">{item.name}</td>
-                      <td className="px-3 py-2 text-muted-foreground">
-                        {item.code}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
-                        {item.groupCount}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {showScore(item.score)}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-red-700">
-                        {item.gap}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </TableShell>
           </div>
 
           <div>
-            <h3 className="mb-2 text-sm font-medium">
+            <SubHeading>
               Faculty below {target}% ({improvement.faculty.length})
-            </h3>
-            <div className="overflow-x-auto rounded-md border">
-              <table className="w-full text-sm">
-                <thead className="border-b bg-muted/50">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-medium">
-                      Faculty member
-                    </th>
-                    <th className="px-3 py-2 text-right font-medium">
-                      Classes
-                    </th>
-                    <th className="px-3 py-2 text-right font-medium">Score</th>
-                    <th className="px-3 py-2 text-right font-medium">
-                      Difference
-                    </th>
+            </SubHeading>
+            <TableShell>
+              <Thead>
+                <tr>
+                  <th className={TH_L}>Faculty member</th>
+                  <th className={TH_R}>Classes</th>
+                  <th className={TH_R}>Score</th>
+                  <th className={TH_R}>Difference</th>
+                </tr>
+              </Thead>
+              <tbody>
+                {improvement.faculty.map((item) => (
+                  <tr key={item.id} className={TR}>
+                    <td className={TD + " font-medium"}>{item.name}</td>
+                    <td className={TD_R + " text-muted-foreground"}>
+                      {item.classCount}
+                    </td>
+                    <td className={TD_R + " font-medium"}>
+                      {showScore(item.score)}
+                    </td>
+                    <td className={TD_R}>
+                      <Delta value={item.gap} />
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {improvement.faculty.map((item) => (
-                    <tr
-                      key={item.id}
-                      className="border-b transition-colors last:border-0 hover:bg-muted/40"
-                    >
-                      <td className="px-3 py-2">{item.name}</td>
-                      <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
-                        {item.classCount}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {showScore(item.score)}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-red-700">
-                        {item.gap}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </TableShell>
             <p className="mt-2 text-xs text-muted-foreground">
               Individual results are on the faculty report page.
             </p>
@@ -722,7 +996,6 @@ export function OverviewReport({
 
       {/* ---------- Requirement 5: question tracking ---------- */}
       <QuestionTrackingSection tracking={tracking} target={target} />
-
     </div>
   );
 }
@@ -753,17 +1026,17 @@ function QuestionTrackingSection({
 
   return (
     <section>
-      <h2 className="mb-1 text-lg font-medium">Question tracking</h2>
-      <p className="mb-4 text-sm text-muted-foreground">
-        Follow one survey question for one degree programme across the
-        semesters.
-      </p>
+      <SectionHeader
+        title="Question tracking"
+        lede="Follow one survey question for one degree programme across the semesters."
+      />
 
-      <div className="mb-4 flex flex-wrap gap-4">
+      {/* The controls sit in one row above everything they scope */}
+      <div className="mb-4 flex flex-wrap items-end gap-4">
         <div>
           <label
             htmlFor="degree-select"
-            className="mb-1.5 block text-sm font-medium"
+            className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted-foreground"
           >
             Degree programme
           </label>
@@ -784,7 +1057,7 @@ function QuestionTrackingSection({
         <div className="min-w-0 flex-1">
           <label
             htmlFor="question-select"
-            className="mb-1.5 block text-sm font-medium"
+            className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted-foreground"
           >
             Survey question
           </label>
@@ -804,83 +1077,43 @@ function QuestionTrackingSection({
       </div>
 
       {!tracked || chartData.length === 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">No data</CardTitle>
-            <CardDescription>
-              There are no results for question {question} at {degree} level.
-            </CardDescription>
-          </CardHeader>
+        <Card className="gap-1 p-5">
+          <p className="text-sm font-medium">No data</p>
+          <p className="text-sm text-muted-foreground">
+            There are no results for question {question} at {degree} level.
+          </p>
         </Card>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
-          <Card className="p-4">
-            <p className="mb-3 text-sm">
-              <span className="font-medium">
+        <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
+          <Panel
+            title={
+              <>
                 Q{question}. {QUESTION_TEXT[question]}
-              </span>
-              <span className="text-muted-foreground">
-                {" "}
-                &middot; {degree} &middot; {tracked.ukpsfCategory}/
-                {tracked.ukpsfCode}
-              </span>
-            </p>
-            <div className="h-56 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData} margin={{ top: 8, right: 44 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="label" tickLine={false} fontSize={12} />
-                  <YAxis
-                    domain={[0, 100]}
-                    tickLine={false}
-                    axisLine={false}
-                    fontSize={12}
-                    unit="%"
-                  />
-                  <Tooltip
-                    formatter={(value: unknown) => [
-                      `${Number(value)}%`,
-                      "Score",
-                    ]}
-                  />
-                  <ReferenceLine
-                    y={target}
-                    stroke="#B42318"
-                    strokeDasharray="4 4"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="score"
-                    stroke="#E0241B"
-                    strokeWidth={2}
-                    dot={{ r: 4, fill: "#E0241B" }}
-                    activeDot={{ r: 6 }}
-                    animationDuration={600}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </Card>
+                <span className="font-normal text-muted-foreground">
+                  {" "}
+                  &middot; {degree} &middot; {tracked.ukpsfCategory}/
+                  {tracked.ukpsfCode}
+                </span>
+              </>
+            }
+            keyItems={[thresholdKey(target)]}
+          >
+            <TrendChart data={chartData} target={target} valueLabel="Score" />
+          </Panel>
 
-          <div className="space-y-3">
+          <div className="space-y-4">
             {tracked.bySemester.map((point) => (
-              <Card
-                key={point.semesterCode}
-                className="transition-shadow hover:shadow-md"
-              >
-                <CardHeader className="pb-2">
-                  <CardDescription className="text-xs">
-                    {point.semesterName}
-                  </CardDescription>
-                  <CardTitle className="text-2xl tabular-nums">
-                    {showScore(point.score)}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-xs text-muted-foreground">
-                    {point.questionCount} answers
-                  </p>
-                </CardContent>
+              <Card key={point.semesterCode} className="gap-2 p-5">
+                <p className="text-xs text-muted-foreground">
+                  {point.semesterName}
+                </p>
+                <p className="text-2xl font-semibold leading-none tracking-tight">
+                  {showScore(point.score)}
+                </p>
+                <Meter score={point.score} target={target} className="h-1.5" />
+                <p className="text-xs text-muted-foreground">
+                  {point.questionCount.toLocaleString()} answers
+                </p>
               </Card>
             ))}
           </div>
@@ -919,100 +1152,55 @@ function DepartmentSection({
     ? Object.values(chosen.bySemester)
         .sort((a, b) => a.semesterOrder - b.semesterOrder)
         .filter((s) => s.score !== null)
-        .map((s) => ({ label: s.semesterName, score: s.score as number }))
+        .map((s) => ({
+          label: s.semesterName,
+          score: s.score as number,
+          answers: s.questionCount,
+        }))
     : [];
 
   return (
     <section>
-      <h2 className="mb-1 text-lg font-medium">Department comparison</h2>
-      <p className="mb-4 text-sm text-muted-foreground">
-        Average score for each of the {names.length} departments. The dashed
-        line marks the {target}% threshold.
-      </p>
+      <SectionHeader
+        title="Department comparison"
+        lede={`Average score for each of the ${names.length} departments, set against the ${target}% threshold and the institutional average.`}
+      />
 
       {/* --- The comparison chart --- */}
-      <Card className="p-4 pt-6">
-        <div className="h-96 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={chartData}
-              layout="vertical"
-              margin={{ top: 4, right: 56, left: 8, bottom: 4 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-              <XAxis
-                type="number"
-                domain={[0, 100]}
-                tickLine={false}
-                axisLine={false}
-                fontSize={12}
-                unit="%"
-              />
-              <YAxis
-                type="category"
-                dataKey="label"
-                width={190}
-                tickLine={false}
-                axisLine={false}
-                fontSize={12}
-              />
-              <Tooltip
-                formatter={(value: unknown) => [`${Number(value)}%`, "Average"]}
-                cursor={{ fill: "rgba(0,0,0,0.04)" }}
-              />
-              <ReferenceLine x={target} stroke="#B42318" strokeDasharray="4 4" />
-              {institution !== null && (
-                <ReferenceLine
-                  x={institution}
-                  stroke="#6B7280"
-                  strokeDasharray="2 2"
-                />
-              )}
-              <Bar
-                dataKey="score"
-                radius={[0, 4, 4, 0]}
-                barSize={24}
-                animationDuration={800}
-              >
-                {chartData.map((entry) => (
-                  <Cell
-                    key={entry.full}
-                    fill={entry.score < target ? "#B42318" : "#047857"}
-                  />
-                ))}
-                <LabelList
-                  dataKey="score"
-                  position="right"
-                  formatter={(value: unknown) => `${Number(value)}%`}
-                  fontSize={12}
-                  fontWeight={600}
-                />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Red dashed line: {target}% threshold. Grey dashed line: institutional
-          average ({institution}%).
-        </p>
-      </Card>
+      <Panel
+        keyItems={[
+          thresholdKey(target),
+          {
+            label: `Institutional average ${institution}%`,
+            color: VIZ.benchmark,
+            dashed: true,
+          },
+          ...statusKeys(target),
+        ]}
+      >
+        <RankedBars
+          data={chartData}
+          target={target}
+          height="h-80"
+          labelWidth={190}
+          benchmark={institution}
+        />
+      </Panel>
 
       {/* --- The detail table --- */}
-      <div className="mt-6 overflow-x-auto rounded-md border">
-        <table className="w-full text-sm">
-          <thead className="border-b bg-muted/50">
+      <div className="mt-4">
+        <TableShell>
+          <Thead>
             <tr>
-              <th className="px-3 py-2 text-left font-medium">Department</th>
-              <th className="px-3 py-2 text-right font-medium">Courses</th>
-              <th className="px-3 py-2 text-right font-medium">Faculty</th>
-              <th className="px-3 py-2 text-right font-medium">Answers</th>
-              <th className="px-3 py-2 text-right font-medium">Score</th>
-              <th className="px-3 py-2 text-right font-medium">
-                vs institution
-              </th>
-              <th className="px-3 py-2 text-left font-medium">Status</th>
+              <th className={TH_L}>Department</th>
+              <th className={TH_R}>Courses</th>
+              <th className={TH_R}>Faculty</th>
+              <th className={TH_R}>Answers</th>
+              <th className={TH_R}>Score</th>
+              <th className={TH_R}>vs institution</th>
+              <th className={TH_L}>Status</th>
             </tr>
-          </thead>
+          </Thead>
           <tbody>
             {names.map((name) => {
               const item = departments[name];
@@ -1021,60 +1209,44 @@ function DepartmentSection({
                   ? Math.round((item.score - institution) * 10) / 10
                   : null;
               return (
-                <tr
-                  key={name}
-                  className="border-b transition-colors last:border-0 hover:bg-muted/40"
-                >
-                  <td className="px-3 py-2">{name}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                <tr key={name} className={TR}>
+                  <td className={TD + " font-medium"}>{name}</td>
+                  <td className={TD_R + " text-muted-foreground"}>
                     {item.courseCount}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                  <td className={TD_R + " text-muted-foreground"}>
                     {item.facultyCount}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                  <td className={TD_R + " text-muted-foreground"}>
                     {item.questionCount.toLocaleString()}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums">
+                  <td className={TD_R + " font-medium"}>
                     {showScore(item.score)}
                   </td>
-                  <td
-                    className={
-                      "px-3 py-2 text-right tabular-nums " +
-                      (difference !== null && difference < 0
-                        ? "text-red-700"
-                        : "text-emerald-700")
-                    }
-                  >
-                    {difference === null
-                      ? "\u2014"
-                      : difference >= 0
-                        ? `+${difference}`
-                        : difference}
+                  <td className={TD_R}>
+                    <Delta value={difference} />
                   </td>
-                  <td className="px-3 py-2">
-                    <StatusLabel status={item.status} />
+                  <td className={TD}>
+                    <StatusPill status={item.status} />
                   </td>
                 </tr>
               );
             })}
           </tbody>
-        </table>
+        </TableShell>
       </div>
 
       {/* --- One department over time --- */}
-      <div className="mt-8">
-        <h3 className="mb-1 text-base font-medium">
-          One department over time
-        </h3>
-        <p className="mb-3 text-sm text-muted-foreground">
+      <div className="mt-10">
+        <SubHeading>One department over time</SubHeading>
+        <p className="mb-4 text-sm text-muted-foreground">
           Choose a department to see how its results have moved.
         </p>
 
         <div className="mb-4">
           <label
             htmlFor="department-select"
-            className="mb-1.5 block text-sm font-medium"
+            className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted-foreground"
           >
             Department
           </label>
@@ -1093,80 +1265,44 @@ function DepartmentSection({
         </div>
 
         {chosen && trend.length > 0 ? (
-          <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
-            <Card className="p-4">
-              <div className="h-56 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={trend} margin={{ top: 8, right: 44 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="label" tickLine={false} fontSize={12} />
-                    <YAxis
-                      domain={[0, 100]}
-                      tickLine={false}
-                      axisLine={false}
-                      fontSize={12}
-                      unit="%"
-                    />
-                    <Tooltip
-                      formatter={(value: unknown) => [
-                        `${Number(value)}%`,
-                        "Average",
-                      ]}
-                    />
-                    <ReferenceLine
-                      y={target}
-                      stroke="#B42318"
-                      strokeDasharray="4 4"
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="score"
-                      stroke="#E0241B"
-                      strokeWidth={2}
-                      dot={{ r: 4, fill: "#E0241B" }}
-                      activeDot={{ r: 6 }}
-                      animationDuration={600}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </Card>
+          <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
+            <Panel title={selected} keyItems={[thresholdKey(target)]}>
+              <TrendChart data={trend} target={target} />
+            </Panel>
 
-            <div className="space-y-3">
+            <div className="space-y-4">
               {["AA", "CK", "PV"].map((code) => {
                 const result = chosen.ukpsfCategories[code];
                 if (!result) return null;
                 return (
-                  <Card
-                    key={code}
-                    className="transition-shadow hover:shadow-md"
-                  >
-                    <CardHeader className="pb-2">
-                      <CardDescription className="text-xs">
-                        {CATEGORY_NAMES[code]}
-                      </CardDescription>
-                      <CardTitle className="text-xl tabular-nums">
-                        {showScore(result.score)}
-                      </CardTitle>
-                    </CardHeader>
+                  <Card key={code} className="gap-2 p-5">
+                    <p className="text-xs text-muted-foreground">
+                      {CATEGORY_NAMES[code]}
+                    </p>
+                    <p className="text-2xl font-semibold leading-none tracking-tight">
+                      {showScore(result.score)}
+                    </p>
+                    <Meter
+                      score={result.score}
+                      target={target}
+                      className="h-1.5"
+                    />
                   </Card>
                 );
               })}
             </div>
           </div>
         ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">No data</CardTitle>
-              <CardDescription>
-                There are no results for this department.
-              </CardDescription>
-            </CardHeader>
+          <Card className="gap-1 p-5">
+            <p className="text-sm font-medium">No data</p>
+            <p className="text-sm text-muted-foreground">
+              There are no results for this department.
+            </p>
           </Card>
         )}
       </div>
 
-      <p className="mt-6 text-xs text-muted-foreground">
+      <p className="mt-6 max-w-3xl text-xs leading-relaxed text-muted-foreground">
         Departments are taken from the timetable PDFs supplied with the data,
         which state the department for every course. The evaluation
         spreadsheets contain no department field. All 184 evaluated courses
@@ -1212,123 +1348,75 @@ function ProgrammeSection({
 
   return (
     <section>
-      <h2 className="mb-1 text-lg font-medium">Programme comparison</h2>
-      <p className="mb-4 text-sm text-muted-foreground">
-        Average score for each of the {all.length} degree programmes. A
-        programme is a degree level within a department.
-      </p>
+      <SectionHeader
+        title="Programme comparison"
+        lede={`Average score for each of the ${all.length} degree programmes. A programme is a degree level within a department.`}
+      />
 
       {/* --- The comparison chart --- */}
-      <Card className="p-4 pt-6">
-        <div className="h-[34rem] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={chartData}
-              layout="vertical"
-              margin={{ top: 4, right: 56, left: 8, bottom: 4 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-              <XAxis
-                type="number"
-                domain={[0, 100]}
-                tickLine={false}
-                axisLine={false}
-                fontSize={12}
-                unit="%"
-              />
-              <YAxis
-                type="category"
-                dataKey="label"
-                width={240}
-                tickLine={false}
-                axisLine={false}
-                fontSize={11}
-              />
-              <Tooltip
-                formatter={(value: unknown) => [`${Number(value)}%`, "Average"]}
-                cursor={{ fill: "rgba(0,0,0,0.04)" }}
-              />
-              <ReferenceLine x={target} stroke="#B42318" strokeDasharray="4 4" />
-              <Bar
-                dataKey="score"
-                radius={[0, 4, 4, 0]}
-                barSize={18}
-                animationDuration={800}
-              >
-                {chartData.map((entry) => (
-                  <Cell
-                    key={entry.full}
-                    fill={entry.score < target ? "#B42318" : "#047857"}
-                  />
-                ))}
-                <LabelList
-                  dataKey="score"
-                  position="right"
-                  formatter={(value: unknown) => `${Number(value)}%`}
-                  fontSize={11}
-                  fontWeight={600}
-                />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </Card>
+      <Panel keyItems={[thresholdKey(target), ...statusKeys(target)]}>
+        <RankedBars
+          data={chartData}
+          target={target}
+          height="h-[34rem]"
+          barSize={16}
+          labelWidth={240}
+          fontSize={11}
+        />
+      </Panel>
 
       {/* --- Programmes below the threshold --- */}
       {below.length > 0 && (
         <div className="mt-6">
-          <h3 className="mb-2 text-base font-medium">
+          <SubHeading>
             Programmes below {target}% ({below.length})
-          </h3>
-          <div className="overflow-x-auto rounded-md border">
-            <table className="w-full text-sm">
-              <thead className="border-b bg-muted/50">
-                <tr>
-                  <th className="px-3 py-2 text-left font-medium">Programme</th>
-                  <th className="px-3 py-2 text-right font-medium">Answers</th>
-                  <th className="px-3 py-2 text-right font-medium">Score</th>
-                  <th className="px-3 py-2 text-right font-medium">
-                    Difference
-                  </th>
+          </SubHeading>
+          <TableShell>
+            <Thead>
+              <tr>
+                <th className={TH_L}>Programme</th>
+                <th className={TH_R}>Answers</th>
+                <th className={TH_R}>Score</th>
+                <th className={TH_R}>Difference</th>
+              </tr>
+            </Thead>
+            <tbody>
+              {below.map((item) => (
+                <tr key={item.name} className={TR}>
+                  <td className={TD}>
+                    <span className="font-medium">{item.name}</span>
+                    {!item.reliable && (
+                      <span
+                        className="ml-2 whitespace-nowrap rounded-full px-2 py-0.5 text-xs"
+                        style={{
+                          backgroundColor: "var(--status-caution-wash)",
+                          color: "var(--status-caution-inline)",
+                        }}
+                      >
+                        few answers, treat with caution
+                      </span>
+                    )}
+                  </td>
+                  <td className={TD_R + " text-muted-foreground"}>
+                    {item.questionCount.toLocaleString()}
+                  </td>
+                  <td className={TD_R + " font-medium"}>
+                    {showScore(item.score)}
+                  </td>
+                  <td className={TD_R}>
+                    <Delta value={item.gap} />
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {below.map((item) => (
-                  <tr
-                    key={item.name}
-                    className="border-b transition-colors last:border-0 hover:bg-muted/40"
-                  >
-                    <td className="px-3 py-2">
-                      {item.name}
-                      {!item.reliable && (
-                        <span className="ml-2 whitespace-nowrap text-xs text-amber-700">
-                          few answers, treat with caution
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
-                      {item.questionCount.toLocaleString()}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
-                      {showScore(item.score)}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-red-700">
-                      {item.gap}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </TableShell>
         </div>
       )}
 
       {/* --- Degree levels compared within each department --- */}
-      <div className="mt-8">
-        <h3 className="mb-1 text-base font-medium">
-          Degree levels within each department
-        </h3>
-        <p className="mb-4 text-sm text-muted-foreground">
+      <div className="mt-10">
+        <SubHeading>Degree levels within each department</SubHeading>
+        <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
           Where a department teaches at more than one level, the gap between
           them is often larger than the gap between departments.
         </p>
@@ -1346,47 +1434,53 @@ function ProgrammeSection({
                 : null;
 
             return (
-              <Card
-                key={department}
-                className="transition-shadow hover:shadow-md"
-              >
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">{department}</CardTitle>
+              <Card key={department} className="gap-4 p-5">
+                <div className="flex items-baseline justify-between gap-3">
+                  <p className="text-sm font-semibold tracking-tight">
+                    {department}
+                  </p>
                   {spread !== null && (
-                    <CardDescription>
-                      {spread} point gap between levels
-                    </CardDescription>
+                    <p className="shrink-0 text-xs text-muted-foreground">
+                      {spread} point gap
+                    </p>
                   )}
-                </CardHeader>
-                <CardContent className="space-y-3">
+                </div>
+                <div className="space-y-3">
                   {items.map((item) => (
                     <div key={item.name}>
                       <div className="flex items-baseline justify-between gap-3">
                         <span className="text-sm">
                           {item.degree}
                           {!item.reliable && (
-                            <span className="ml-2 text-xs text-amber-700">
+                            <span
+                              className="ml-2 text-xs"
+                              style={{ color: "var(--status-caution-inline)" }}
+                            >
                               {item.questionCount} answers
                             </span>
                           )}
                         </span>
-                        <span className="shrink-0 tabular-nums text-sm font-medium">
+                        <span className="shrink-0 text-sm font-semibold tabular-nums">
                           {showScore(item.score)}
                         </span>
                       </div>
-                      <div className="mt-1.5">
-                        <ScoreBar score={item.score} target={target} />
+                      <div className="mt-2">
+                        <Meter
+                          score={item.score}
+                          target={target}
+                          className="h-1.5"
+                        />
                       </div>
                     </div>
                   ))}
-                </CardContent>
+                </div>
               </Card>
             );
           })}
         </div>
       </div>
 
-      <p className="mt-6 text-xs text-muted-foreground">
+      <p className="mt-6 max-w-3xl text-xs leading-relaxed text-muted-foreground">
         The source data contains no field named &ldquo;Programme&rdquo;. A
         programme here is a degree level within a department, which is how a
         degree of study is normally described. Both fields come from the

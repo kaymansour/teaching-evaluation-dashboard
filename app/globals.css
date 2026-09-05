@@ -117,6 +117,75 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* ---------- Dashboard design tokens ----------
+   One place for the colours the dashboards draw with.
+   Charts reference these by role (var(--viz-meets)) rather than
+   carrying raw hex values, so the whole system moves together.
+
+   The pass/fail pair is blue and red, not green and red. Under
+   deuteranopia the old green/red pair measured a colour difference
+   of 4.1 (needs 8), so a red-green colourblind reader could not tell
+   a passing department from a failing one. Blue against red measures
+   20.4 and reads correctly for everyone. */
+
+:root {
+  /* College house style, taken from the site header */
+  --brand-navy: #171f32;
+  --brand-red: #cf162d;
+
+  /* The plane the dashboard cards sit on */
+  --plane: #f4f5f8;
+
+  /* Chart chrome and ink */
+  --chart-surface: #ffffff;
+  --chart-ink: #14161c;
+  --chart-ink-muted: #5f6169;
+  --chart-grid: #e7e8ec;
+
+  /* Data marks. One measure, scored against the threshold. */
+  --viz-meets: #256abf;
+  --viz-meets-track: #dce8f8;
+  --viz-below: #d03b3b;
+  --viz-below-track: #f8e2e2;
+  --viz-threshold: #d03b3b;
+  --viz-benchmark: #8b8d95;
+
+  /* Status. Always carried with a written label, never colour alone. */
+  --status-good: #0ca30c;
+  --status-good-inline: #006300;
+  --status-good-wash: #e8f6e8;
+  --status-critical: #d03b3b;
+  --status-critical-inline: #9a2c2c;
+  --status-critical-wash: #fbeaea;
+  --status-caution-inline: #8a5a00;
+  --status-caution-wash: #fdf3e0;
+}
+
+.dark {
+  --plane: #0d0e11;
+
+  --chart-surface: #1a1c20;
+  --chart-ink: #ffffff;
+  --chart-ink-muted: #a9abb3;
+  --chart-grid: #2c2e34;
+
+  --viz-meets: #5598e7;
+  --viz-meets-track: #1f3a5c;
+  --viz-below: #e66767;
+  --viz-below-track: #4a2222;
+  --viz-threshold: #e66767;
+  --viz-benchmark: #8b8d95;
+
+  --status-good: #0ca30c;
+  --status-good-inline: #57c957;
+  --status-good-wash: #143014;
+  --status-critical: #e66767;
+  --status-critical-inline: #f09a9a;
+  --status-critical-wash: #331919;
+  --status-caution-inline: #e7b45c;
+  --status-caution-wash: #33280f;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -164,5 +233,11 @@
   /* Sensible page margins */
   @page {
     margin: 1.5cm;
+  }
+}
+/* The dashboard's tinted plane prints as plain white */
+@media print {
+  .dashboard-plane {
+    background: white !important;
   }
 }

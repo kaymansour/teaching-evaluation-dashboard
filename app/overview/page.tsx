@@ -22,20 +22,57 @@ export default async function OverviewPage() {
   const data = await readJson<OverviewData>("overview.json");
   const tracking = await readJson<QuestionTracking>("question-tracking.json");
 
-  return (
-    <main className="mx-auto max-w-5xl px-6 py-10">
-      <header className="mb-8">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Institutional overview
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Teaching evaluation results across the whole college, mapped to the
-          UK Professional Standards Framework. The minimum acceptable score is{" "}
-          {data.target}%.
-        </p>
-      </header>
+  const semesters = Object.values(data.bySemester).sort(
+    (a, b) => a.semesterOrder - b.semesterOrder
+  );
+  const first = semesters[0];
+  const last = semesters[semesters.length - 1];
 
-      <OverviewReport data={data} tracking={tracking} />
-    </main>
+  return (
+    // The cards sit on a tinted plane so each one reads as a surface
+    // of its own rather than as a box drawn on the page.
+    <div className="dashboard-plane flex-1 bg-[var(--plane)]">
+      <main className="mx-auto max-w-6xl px-6 py-10">
+        <header className="mb-10">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Institutional overview
+          </p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight">
+            Teaching evaluation across the college
+          </h1>
+          <p className="mt-3 max-w-3xl text-sm leading-relaxed text-muted-foreground">
+            Student evaluation results for the whole college, mapped to the UK
+            Professional Standards Framework. Anything scoring below{" "}
+            {data.target}% is flagged as improvement required.
+          </p>
+          <dl className="mt-6 flex flex-wrap gap-x-8 gap-y-3 border-t pt-4 text-sm">
+            <div className="flex items-baseline gap-2">
+              <dt className="text-muted-foreground">Semesters shown</dt>
+              <dd className="font-medium">
+                {first?.semesterName} to {last?.semesterName}
+              </dd>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <dt className="text-muted-foreground">Threshold</dt>
+              <dd className="font-medium tabular-nums">{data.target}%</dd>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <dt className="text-muted-foreground">Departments</dt>
+              <dd className="font-medium tabular-nums">
+                {Object.keys(data.byDepartment).length}
+              </dd>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <dt className="text-muted-foreground">Programmes</dt>
+              <dd className="font-medium tabular-nums">
+                {Object.keys(data.byProgramme).length}
+              </dd>
+            </div>
+          </dl>
+        </header>
+
+        <OverviewReport data={data} tracking={tracking} />
+      </main>
+    </div>
   );
 }
