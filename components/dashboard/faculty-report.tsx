@@ -33,8 +33,6 @@ import { VIZ } from "@/lib/chart-theme";
 import {
   CATEGORY_MEANING,
   CATEGORY_NAMES,
-  CODE_ORDER,
-  CODE_TEXT,
   QUESTION_TEXT,
 } from "@/lib/survey";
 
@@ -62,6 +60,8 @@ import {
   RankedBars,
   TrendChart,
 } from "@/components/dashboard/report-charts";
+
+import { FacultyPrintReport } from "@/components/dashboard/faculty-print-report";
 
 import type {
   FacultyDetail,
@@ -290,7 +290,17 @@ export function FacultyReport({ faculty }: { faculty: FacultyListItem[] }) {
         </Card>
       )}
 
-      {detail && !loading && <Report detail={detail} />}
+      {detail && !loading && (
+        <>
+          {/* The dashboard, on screen only */}
+          <div className="print:hidden">
+            <Report detail={detail} />
+          </div>
+
+          {/* The formal four-part report, on paper only */}
+          <FacultyPrintReport detail={detail} />
+        </>
+      )}
     </div>
   );
 }
@@ -359,22 +369,12 @@ function Report({ detail }: { detail: FacultyDetail }) {
 
   return (
     <div className="space-y-14">
-      {/* Printed reports need their own title block */}
-      <div className="hidden print:block">
-        <p className="text-xs text-muted-foreground">
-          University College of Bahrain &middot; Teaching Evaluation Report
-        </p>
-      </div>
-
       {/* --- Headline --- */}
       <section>
         <div className="mb-5 flex flex-wrap items-baseline gap-3">
           <h2 className="text-2xl font-semibold tracking-tight">
             {detail.name}
           </h2>
-          <span className="hidden text-sm text-muted-foreground print:inline">
-            Faculty ID {detail.id}
-          </span>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-3">
@@ -501,48 +501,6 @@ function Report({ detail }: { detail: FacultyDetail }) {
             );
           })}
         </div>
-      </section>
-
-      {/* --- Detailed standards: printed report only, to keep the page calm --- */}
-      <section className="hidden break-inside-avoid print:block">
-        <SectionHeader
-          title="Detailed standards"
-          lede="The twelve detailed standards. Standards based on fewer questions are less reliable, so the number of answers is shown."
-        />
-        <TableShell>
-          <Thead>
-            <tr>
-              <th className={TH_L}>Code</th>
-              <th className={TH_L}>Standard</th>
-              <th className={TH_R}>Answers</th>
-              <th className={TH_R}>Score</th>
-              <th className={TH_L}>Status</th>
-            </tr>
-          </Thead>
-          <tbody>
-            {CODE_ORDER.map((code) => {
-              const result = detail.ukpsfCodes[code];
-              if (!result) return null;
-              return (
-                <tr key={code} className={TR}>
-                  <td className={TD + " font-medium"}>{code}</td>
-                  <td className={TD + " text-muted-foreground"}>
-                    {CODE_TEXT[code]}
-                  </td>
-                  <td className={TD_R + " text-muted-foreground"}>
-                    {result.questionCount}
-                  </td>
-                  <td className={TD_R + " font-medium"}>
-                    {showScore(result.score)}
-                  </td>
-                  <td className={TD}>
-                    <StatusPill status={result.status} />
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </TableShell>
       </section>
 
       {/* --- Semester trend --- */}

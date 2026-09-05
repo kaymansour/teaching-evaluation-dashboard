@@ -185,6 +185,74 @@ export function RankedBars({
   );
 }
 
+// The same ranked bars, drawn to an explicit size for the printed
+// report.
+//
+// The printed report sits under display:none until the browser
+// switches to print media, and ResponsiveContainer sizes itself by
+// measuring its parent: measured while hidden it comes out at zero and
+// draws nothing at all. Fixed width and height need no measurement, so
+// the SVG is in the DOM and fully painted long before the print dialog
+// opens. Animation is off for the same reason, and there is no tooltip
+// because paper cannot be hovered.
+export function PrintBars({
+  data,
+  target,
+  width = 620,
+  rowHeight = 34,
+  labelWidth = 190,
+  fontSize = 11,
+}: {
+  data: RankedRow[];
+  target: number;
+  width?: number;
+  rowHeight?: number;
+  labelWidth?: number;
+  fontSize?: number;
+}) {
+  const height = Math.max(data.length * rowHeight + 16, 72);
+
+  return (
+    <BarChart
+      width={width}
+      height={height}
+      data={data}
+      layout="vertical"
+      margin={{ top: 4, right: 52, left: 0, bottom: 4 }}
+    >
+      <XAxis type="number" domain={[0, 100]} hide />
+      <YAxis
+        type="category"
+        dataKey="label"
+        width={labelWidth}
+        tickLine={false}
+        axisLine={false}
+        tick={{ ...AXIS_TICK, fontSize }}
+      />
+      <ReferenceLine x={target} stroke={VIZ.threshold} strokeDasharray="4 4" />
+      <Bar
+        dataKey="score"
+        radius={[0, 3, 3, 0]}
+        maxBarSize={BAR_SIZE}
+        isAnimationActive={false}
+      >
+        {data.map((entry) => (
+          <Cell key={entry.full} fill={scoreColor(entry.score, target)} />
+        ))}
+        <LabelList
+          dataKey="score"
+          position="right"
+          offset={9}
+          fill={VIZ.ink}
+          fontSize={fontSize}
+          fontWeight={600}
+          formatter={(value: unknown) => `${Number(value)}%`}
+        />
+      </Bar>
+    </BarChart>
+  );
+}
+
 // The share of a department's survey answers that came from each of
 // its degree levels. Answers rather than score, because a score is not
 // a part of a whole and a ring drawn from one would be a lie; the

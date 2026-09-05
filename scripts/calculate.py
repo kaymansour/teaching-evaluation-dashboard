@@ -112,6 +112,12 @@ else:
 print()
 
 
+# Course codes carry a trailing marker in some files. Strip it so a
+# section keys the same way everywhere it is counted.
+def tidy_code(code):
+    return code.replace("*", "").strip()
+
+
 # ---------------------------------------------------------------
 # WORK OUT ALL THE RESULTS
 # ---------------------------------------------------------------
@@ -259,6 +265,7 @@ for fid, f_rows in group_by(rows, lambda r: r["FacultyID"]).items():
         entry = summarise(sem_rows)
         entry["semesterName"] = sem_rows[0]["SemesterName"]
         entry["semesterOrder"] = int(sem_rows[0]["SemesterOrder"])
+        entry["academicYear"] = sem_rows[0]["AcademicYear"]
         semesters[sem] = entry
 
     # This teacher's score on each survey question
@@ -295,6 +302,62 @@ for fid, f_rows in group_by(rows, lambda r: r["FacultyID"]).items():
 
     classes.sort(key=lambda c: (c["semesterOrder"], c["courseCode"], c["section"]))
 
+    # --- Who this teacher was asked about ---------------------------
+    #
+    # The same section key and the same timetable enrolment lookup the
+    # institutional participation figures use. A section carrying both
+    # Diploma and Bachelor students is surveyed twice, so its
+    # respondents add up while its enrolment is counted once.
+    f_surveys = {}
+    for r in f_rows:
+        section = (r["SemesterCode"], tidy_code(r["CourseCode"]), r["Section"])
+        survey = (section, r["Degree"], r["CourseEdition"])
+        f_surveys[survey] = int(r["EvaluatedStudents"])
+
+    f_sections = sorted({survey[0] for survey in f_surveys})
+    f_matched = [k for k in f_sections if k in enrolment]
+
+    audience = sum(enrolment[k] for k in f_matched)
+    responses = sum(f_surveys.values())
+
+    # A section with no enrolment figure has nothing to set its
+    # respondents against, so the ratio is worked out from the sections
+    # carrying both. sectionsWithEnrolment against sectionsTaught says
+    # how much of the teaching that covers, and responsesMatched is the
+    # respondent total that actually divides into audience.
+    responses_matched = sum(count for survey, count in f_surveys.items()
+                            if survey[0] in enrolment)
+
+    response = {
+        "audience": audience if enrolment else None,
+        "responses": responses,
+        "responsesMatched": responses_matched if enrolment else None,
+        "responseRatio": (round(responses_matched / audience * 100, 2)
+                          if audience else None),
+        "sectionsTaught": len(f_sections),
+        "sectionsWithEnrolment": len(f_matched),
+    }
+
+    # --- The department this teacher mostly sits in ------------------
+    #
+    # Some teach across more than one, so the share of their answers
+    # that came from the main department is carried beside the
+    # benchmark rather than hidden behind it. Ties fall to the first
+    # name alphabetically, so the pick is stable between runs.
+    dept_answers = {}
+    for r in f_rows:
+        name = r["DepartmentName"]
+        dept_answers[name] = dept_answers.get(name, 0) + 1
+
+    main_dept = max(sorted(dept_answers), key=lambda n: dept_answers[n])
+
+    department = {
+        "name": main_dept,
+        "score": by_department[main_dept]["score"],
+        "share": round(dept_answers[main_dept] / len(f_rows) * 100, 1),
+        "count": len(dept_answers),
+    }
+
     faculty_detail[fid] = {
         "id": fid,
         "name": f_rows[0]["FacultyNameClean"],
@@ -307,6 +370,8 @@ for fid, f_rows in group_by(rows, lambda r: r["FacultyID"]).items():
         "classes": classes,
         "courseCount": len({r["CourseCode"] for r in f_rows}),
         "classCount": len(classes),
+        "response": response,
+        "department": department,
     }
 
 
@@ -347,11 +412,8 @@ for degree, degree_rows in group_by(rows, lambda r: r["Degree"]).items():
 # A class section can be evaluated more than once, because a mixed
 # class has its Diploma and Bachelor students surveyed separately. The
 # respondents of those surveys add up; the section's enrolment is
-# counted once.
-
-def tidy_code(code):
-    return code.replace("*", "").strip()
-
+# counted once. tidy_code is defined further up, because the faculty
+# figures key their sections the same way.
 
 responded_by_section = {}
 for r in rows:

@@ -41,6 +41,34 @@ export type ClassResult = Result & {
 export type FacultySemester = Result & {
   semesterName: string;
   semesterOrder: number;
+  academicYear: string;
+};
+
+// How many students a teacher was asked about, and how many answered.
+// Enrolment comes from the timetable PDFs, so audience, responsesMatched
+// and responseRatio are null when that lookup is absent.
+//
+// responses is the total across every survey; responsesMatched counts
+// only the sections that also carry an enrolment figure, so it is the
+// one that divides into audience. Where sectionsWithEnrolment is short
+// of sectionsTaught the two differ, and the report says so.
+export type FacultyResponse = {
+  audience: number | null;
+  responses: number;
+  responsesMatched: number | null;
+  responseRatio: number | null;
+  sectionsTaught: number;
+  sectionsWithEnrolment: number;
+};
+
+// The department a teacher mostly sits in, and its average. share is
+// the percentage of their survey answers that came from it, carried
+// because some teach across more than one department.
+export type FacultyDepartment = {
+  name: string;
+  score: number | null;
+  share: number;
+  count: number;
 };
 
 // public/data/faculty/<id>.json
@@ -56,6 +84,8 @@ export type FacultyDetail = {
   classes: ClassResult[];
   courseCount: number;
   classCount: number;
+  response: FacultyResponse;
+  department: FacultyDepartment;
   benchmarks: {
     institution: number | null;
     target: number;

@@ -270,3 +270,85 @@
     display: none !important;
   }
 }
+
+/* ---------- The printed faculty report ----------
+
+   /faculty prints a formal four-part document rather than a snapshot
+   of the dashboard: cover, summary, results by course, question
+   breakdown. The tree lives under display:none on screen, so every
+   rule below is scoped to .print-report and none of it can reach the
+   dashboard. */
+
+@media print {
+  /* Print from the light palette whatever the screen is set to, and
+     darken the marks a little for ink. Declared on the report itself
+     rather than on :root, so the overview's printout keeps the colours
+     it already had. */
+  .print-report {
+    --chart-surface: #ffffff;
+    --chart-ink: #000000;
+    --chart-ink-muted: #3d3f45;
+    --chart-grid: #d9dade;
+
+    --viz-meets: #1f4f8f;
+    --viz-below: #a52a2a;
+    --viz-threshold: #a52a2a;
+    --viz-benchmark: #6b6d75;
+  }
+
+  /* Browsers drop backgrounds when printing. The bars are the data, so
+     they have to survive that. */
+  .print-report,
+  .print-report * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-report {
+    color: #000;
+    font-size: 11px;
+  }
+
+  /* Each of the four parts opens a page of its own */
+  .print-part {
+    break-before: page;
+  }
+  .print-part:first-child {
+    break-before: auto;
+  }
+
+  /* The global rules above stop every section and table from breaking,
+     which a full-page part cannot honour and a long table must not:
+     a table that cannot break can never repeat its header. Inside the
+     printed report the unit that must stay whole is the row, and any
+     block marked as one piece. */
+  .print-report section,
+  .print-report table {
+    break-inside: auto;
+  }
+  .print-report tr,
+  .print-report thead,
+  .print-report .print-keep {
+    break-inside: avoid;
+  }
+
+  /* Repeat the head of any table that spans a page break */
+  .print-report thead {
+    display: table-header-group;
+  }
+
+  /* Recharts is drawn to an explicit size here, so there is nothing to
+     measure; this only stops a half-finished transition being caught
+     by the print dialog. */
+  .print-report .recharts-wrapper,
+  .print-report .recharts-surface {
+    overflow: visible;
+  }
+  .print-report .recharts-layer,
+  .print-report .recharts-rectangle,
+  .print-report .recharts-bar-rectangle {
+    animation: none !important;
+    transition: none !important;
+    opacity: 1 !important;
+  }
+}
