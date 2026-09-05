@@ -103,6 +103,8 @@ export type ImprovementSummary = {
 export type OverviewData = {
   target: number;
   institution: Result;
+  participation: Participation;
+  coverage: Coverage;
   bySemester: Record<string, SemesterResult>;
   byAcademicYear: Record<string, Result>;
   byUkpsfCategory: Record<string, Result>;
@@ -117,6 +119,25 @@ export type OverviewData = {
 };
 
 // --- Overview page ---------------------------------------------
+
+// Who was asked, and who answered. Enrolment comes from the timetable
+// PDFs; the evaluation files carry only the number who answered, so
+// eligibleStudents and responseRate are null when that lookup is absent.
+export type Participation = {
+  eligibleStudents: number | null;
+  studentsResponded: number;
+  responseRate: number | null;
+  sectionsEvaluated: number;
+  sectionsWithEnrolment: number;
+};
+
+// How much teaching the evaluation actually reached
+export type Coverage = {
+  facultyEvaluated: number;
+  coursesEvaluated: number;
+  classSectionsEvaluated: number;
+  semesters: number;
+};
 
 // One faculty member below the threshold
 export type ImprovementFaculty = {

@@ -34,11 +34,8 @@ export default async function OverviewPage() {
     <div className="dashboard-plane flex-1 bg-[var(--plane)]">
       <main className="mx-auto max-w-6xl px-6 py-10">
         <header className="mb-10">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Institutional overview
-          </p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-            Teaching evaluation across the college
+          <h1 className="text-3xl font-semibold tracking-tight">
+            University Teaching Evaluation Overview
           </h1>
           <p className="mt-3 max-w-3xl text-sm leading-relaxed text-muted-foreground">
             Student evaluation results for the whole college, mapped to the UK

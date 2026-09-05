@@ -139,17 +139,19 @@ export function OverviewReport({
     .filter((item): item is RankedRow => item !== null);
 
   const improvement = data.improvement;
+  const participation = data.participation;
+  const coverage = data.coverage;
 
   return (
     <div className="space-y-14">
-      {/* ---------- Headline ---------- */}
+      {/* ---------- The two numbers the page leads with ---------- */}
       <section>
-        <div className="grid gap-4 lg:grid-cols-3">
-          {/* The one number the page leads with */}
-          <Card className="justify-between gap-6 p-6 lg:row-span-2">
+        <div className="grid gap-4 lg:grid-cols-2">
+          {/* --- How well the college teaches --- */}
+          <Card className="justify-between gap-6 p-6">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Institutional average
+                Overall teaching score
               </p>
               <p className="mt-3 text-6xl font-semibold leading-none tracking-tight">
                 {showScore(data.institution.score)}
@@ -176,43 +178,102 @@ export function OverviewReport({
                   : `${Math.abs(
                       data.institution.gap ?? 0
                     )} points below the ${target}% threshold`}
+                {" · "}
+                {data.institution.questionCount.toLocaleString()} survey answers
               </p>
             </div>
           </Card>
 
-          <StatTile
-            label={`Faculty below ${target}%`}
-            value={improvement.faculty.length}
-            flagged
-            note={
-              data.improvementSummary
-                ? `of ${data.improvementSummary.facultyTotal} (${data.improvementSummary.facultyBelowPercent}%)`
-                : "faculty members"
-            }
-          />
+          {/* --- How many students the score rests on --- */}
+          <Card className="justify-between gap-6 p-6">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Student participation
+              </p>
+              <p className="mt-3 text-6xl font-semibold leading-none tracking-tight">
+                {participation.responseRate === null
+                  ? "—"
+                  : `${participation.responseRate}%`}
+              </p>
+              <p className="mt-4 text-sm text-muted-foreground">
+                of eligible students responded
+              </p>
+            </div>
 
-          <StatTile
-            label={`Courses below ${target}%`}
-            value={improvement.courses.length}
-            flagged
-            note={
-              data.improvementSummary
-                ? `of ${data.improvementSummary.courseTotal} (${data.improvementSummary.courseBelowPercent}%)`
-                : "courses"
-            }
-          />
+            <div className="space-y-4">
+              {participation.responseRate !== null && (
+                <div
+                  className="h-2.5 w-full overflow-hidden rounded-full"
+                  style={{ backgroundColor: VIZ.meetsTrack }}
+                  role="img"
+                  aria-label={`${participation.responseRate}% of eligible students responded`}
+                >
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${Math.min(participation.responseRate, 100)}%`,
+                      backgroundColor: VIZ.meets,
+                    }}
+                  />
+                </div>
+              )}
 
-          <StatTile
-            label={`Classes below ${target}%`}
-            value={improvement.classes.length}
-            flagged
-            note="individual class sections"
-          />
+              <dl className="grid grid-cols-2 gap-4 border-t pt-4">
+                <div>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Eligible students
+                  </dt>
+                  <dd className="mt-1 text-2xl font-semibold tabular-nums">
+                    {participation.eligibleStudents === null
+                      ? "—"
+                      : participation.eligibleStudents.toLocaleString()}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Students responded
+                  </dt>
+                  <dd className="mt-1 text-2xl font-semibold tabular-nums">
+                    {participation.studentsResponded.toLocaleString()}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </Card>
+        </div>
 
+        <p className="mt-3 max-w-3xl text-xs leading-relaxed text-muted-foreground">
+          Enrolment comes from the timetable PDFs, which give the enrolled
+          number for every class section; the evaluation files give the number
+          who answered. Both count places rather than people, so a student
+          enrolled in four evaluated classes counts four times. All{" "}
+          {participation.sectionsWithEnrolment} evaluated class sections
+          carried an enrolment figure.
+        </p>
+      </section>
+
+      {/* ---------- Evaluation coverage ---------- */}
+      <section>
+        <SectionHeader
+          title="Evaluation coverage"
+          lede={`How much of the college's teaching the evaluation reached, across ${coverage.semesters} semesters.`}
+        />
+
+        <div className="grid gap-4 sm:grid-cols-3">
           <StatTile
-            label="Student answers"
-            value={data.institution.questionCount}
-            note={`across ${data.institution.groupCount} classes`}
+            label="Faculty evaluated"
+            value={coverage.facultyEvaluated}
+            note="teaching staff with results"
+          />
+          <StatTile
+            label="Courses evaluated"
+            value={coverage.coursesEvaluated}
+            note="distinct courses"
+          />
+          <StatTile
+            label="Class sections evaluated"
+            value={coverage.classSectionsEvaluated}
+            note={`surveys across ${participation.sectionsEvaluated} timetabled sections`}
           />
         </div>
       </section>
@@ -385,6 +446,28 @@ export function OverviewReport({
           title="Improvement required"
           lede={`Everything scoring below the ${target}% threshold, gathered in one place.`}
         />
+
+        {/* The size of the problem, before the lists that spell it out */}
+        <div className="mb-8 grid gap-4 sm:grid-cols-3">
+          <StatTile
+            label={`Faculty below ${target}%`}
+            value={improvement.faculty.length}
+            flagged
+            note={`of ${coverage.facultyEvaluated} (${data.improvementSummary.facultyBelowPercent}%)`}
+          />
+          <StatTile
+            label={`Courses below ${target}%`}
+            value={improvement.courses.length}
+            flagged
+            note={`of ${coverage.coursesEvaluated} (${data.improvementSummary.courseBelowPercent}%)`}
+          />
+          <StatTile
+            label={`Classes below ${target}%`}
+            value={improvement.classes.length}
+            flagged
+            note={`of ${coverage.classSectionsEvaluated} class sections`}
+          />
+        </div>
 
         <div className="space-y-8">
           <div>
@@ -757,7 +840,10 @@ function DepartmentSection({
             Department
           </label>
           <Select value={selected} onValueChange={setSelected}>
-            <SelectTrigger id="department-select" className="w-full sm:w-80">
+            <SelectTrigger
+              id="department-select"
+              className="w-full max-w-full bg-card sm:w-80 *:data-[slot=select-value]:block *:data-[slot=select-value]:truncate"
+            >
               <SelectValue placeholder="Choose a department" />
             </SelectTrigger>
             <SelectContent>
@@ -783,14 +869,6 @@ function DepartmentSection({
           </Card>
         )}
       </div>
-
-      <p className="mt-6 max-w-3xl text-xs leading-relaxed text-muted-foreground">
-        Departments are taken from the timetable PDFs supplied with the data,
-        which state the department for every course. The evaluation
-        spreadsheets contain no department field. All 184 evaluated courses
-        were matched, and the three timetables agree with each other in every
-        case.
-      </p>
     </section>
   );
 }

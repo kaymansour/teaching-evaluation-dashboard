@@ -21,6 +21,7 @@ import json
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
+LOOKUP_DIR = PROJECT_ROOT / "data" / "lookups"
 
 # The university's minimum acceptable score
 TARGET = 65.0
@@ -91,6 +92,23 @@ with open(PROCESSED_DIR / "evaluations_clean.csv", encoding="utf-8-sig") as f:
     rows = list(csv.DictReader(f))
 
 print("Loaded", len(rows), "question scores")
+
+# How many students were enrolled in each class section, read from the
+# timetable PDFs by scripts/extract_enrolment.py. Without it a response
+# rate cannot be worked out, so its absence is reported rather than
+# guessed around.
+enrolment = {}
+enrolment_path = LOOKUP_DIR / "section_enrolment.csv"
+
+if enrolment_path.exists():
+    with open(enrolment_path, encoding="utf-8-sig") as f:
+        for r in csv.DictReader(f):
+            key = (r["SemesterCode"], r["CourseCode"], r["Section"])
+            enrolment[key] = int(r["Enrolled"])
+    print("Loaded", len(enrolment), "class-section enrolments")
+else:
+    print("No section_enrolment.csv - run scripts/extract_enrolment.py")
+
 print()
 
 
@@ -322,6 +340,51 @@ for degree, degree_rows in group_by(rows, lambda r: r["Degree"]).items():
         }
 
     question_tracking[degree] = by_q
+
+
+# --- Who took part, and how much teaching was covered ----------------
+#
+# A class section can be evaluated more than once, because a mixed
+# class has its Diploma and Bachelor students surveyed separately. The
+# respondents of those surveys add up; the section's enrolment is
+# counted once.
+
+def tidy_code(code):
+    return code.replace("*", "").strip()
+
+
+responded_by_section = {}
+for r in rows:
+    key = (r["SemesterCode"], tidy_code(r["CourseCode"]), r["Section"])
+    survey = (key, r["Degree"], r["CourseEdition"], r["FacultyID"])
+    responded_by_section.setdefault(key, {})[survey] = int(r["EvaluatedStudents"])
+
+sections_evaluated = sorted(responded_by_section)
+sections_matched = [k for k in sections_evaluated if k in enrolment]
+
+responded = sum(sum(surveys.values())
+                for surveys in responded_by_section.values())
+responded_matched = sum(sum(responded_by_section[k].values())
+                        for k in sections_matched)
+eligible = sum(enrolment[k] for k in sections_matched)
+
+participation = {
+    "eligibleStudents": eligible if enrolment else None,
+    "studentsResponded": responded,
+    "responseRate": (round(responded_matched / eligible * 100, 1)
+                     if eligible else None),
+    # The rate is worked out from the sections that carry both figures,
+    # so say how many that was
+    "sectionsEvaluated": len(sections_evaluated),
+    "sectionsWithEnrolment": len(sections_matched),
+}
+
+coverage = {
+    "facultyEvaluated": len({r["FacultyID"] for r in rows}),
+    "coursesEvaluated": len({tidy_code(r["CourseCode"]) for r in rows}),
+    "classSectionsEvaluated": institution["groupCount"],
+    "semesters": len(by_semester),
+}
 
 
 # --- Requirement 4: everything below the target, in one place --------
@@ -587,6 +650,8 @@ if thin:
 metrics = {
     "target": TARGET,
     "institution": institution,
+    "participation": participation,
+    "coverage": coverage,
     "bySemester": by_semester,
     "byAcademicYear": by_year,
     "byUkpsfCategory": by_category,

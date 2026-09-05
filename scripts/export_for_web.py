@@ -62,6 +62,8 @@ WEB_FACULTY.mkdir(parents=True, exist_ok=True)
 overview = {
     "target": metrics["target"],
     "institution": metrics["institution"],
+    "participation": metrics["participation"],
+    "coverage": metrics["coverage"],
     "bySemester": metrics["bySemester"],
     "byAcademicYear": metrics["byAcademicYear"],
     "byUkpsfCategory": metrics["byUkpsfCategory"],
